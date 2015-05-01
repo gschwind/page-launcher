@@ -16,6 +16,115 @@ from gi.repository import Pango
 from xdg.IconTheme import getIconPath
 from xdg.DesktopEntry import DesktopEntry
 
+import shlex
+import subprocess
+
+font = "Sans 20"
+color_apps = Clutter.Color.new(255,255,255,255)
+
+font_entry = "Sans Bold 30"
+color_entry = Clutter.Color.new(255,255,255,255) # red,green,blue,alpha
+
+
+
+class apps_entry:
+ def __init__(self, de):
+  size = 128.0
+  self.name = de.getName().lower()
+  self.generic_name = de.getGenericName().lower()
+  self.comment = de.getComment().lower()
+  self.exe = re.sub(u"%\w*", u"", de.getExec())
+  self.icon = self._find_icon(de.getIcon())
+  self.icon.set_size(size,size)
+  self.text = Clutter.Text.new_full(font, de.getName(), color_apps)
+  self.text.set_width(size)
+  self.text.set_ellipsize(Pango.EllipsizeMode.END)
+  self.text.set_line_alignment(Pango.Alignment.CENTER)
+  self.rect = Clutter.Rectangle.new()
+  self.rect.set_size(128.0*1.2,128.0*1.2*1.5)
+  self.rect.set_color(Clutter.Color.new(128,128,128,128))
+  self.rect.set_reactive(True)
+  self.rect.set_opacity(0)
+  self.rect.connect("enter-event", apps_entry.enter_handler, self)
+  self.rect.connect("leave-event", apps_entry.leave_handler, self)
+  self.rect.connect("button-press-event", apps_entry.button_press_handler, self)
+  self.fade_in_transition = Clutter.PropertyTransition.new("opacity")
+  self.fade_in_transition.set_duration(100)
+  self.fade_in_transition.set_to(255)
+  self.fade_in_transition.connect("completed", apps_entry.fade_in_completed, self)
+  self.fade_out_transition = Clutter.PropertyTransition.new("opacity")
+  self.fade_out_transition.set_duration(2000)
+  self.fade_out_transition.set_to(0)
+  self.fade_out_transition.connect("completed", apps_entry.fade_out_completed, self)
+  stage.add_child(self.rect)
+  stage.add_child(self.icon)
+  stage.add_child(self.text)
+  self.hide()
+  pass
+
+ def enter_handler(widget, event, self):
+  print("enter")
+  #self.rect.set_opacity(255)
+  if self.rect.get_transition("fade_out"):
+   self.rect.remove_transition("fade_out")
+  if not self.rect.get_transition("fade_in"):
+   self.rect.add_transition("fade_in", self.fade_in_transition)
+  return True
+ def leave_handler(widget, event, self):
+  print("leave")
+  #self.rect.set_opacity(0)
+  if self.rect.get_transition("fade_in"):
+   self.rect.remove_transition("fade_in")
+  if not self.rect.get_transition("fade_out"):
+   self.rect.add_transition("fade_out", self.fade_out_transition)
+  return True
+
+ def _find_icon(self, icon_name, size = 128):
+  icon_theme = Gtk.IconTheme.get_default()
+  gtk_icon_info = icon_theme.lookup_icon(icon_name, 128, 0)
+  if gtk_icon_info:
+   icon_path = gtk_icon_info.get_filename()
+  else:
+   icon_path = getIconPath(icon_name, size)
+   if not icon_path:
+    icon_path = "apps.svg"
+  return Clutter.Texture.new_from_file(icon_path)
+
+ def show(self):
+  self.rect.show()
+  self.icon.show()
+  self.text.show()
+  pass
+ def hide(self):
+  self.rect.hide()
+  self.icon.hide()
+  self.text.hide()
+  pass
+
+ def set_position(self, x, y):
+  self.rect.set_position(x-128.0*0.10,y-128.0*0.10)
+  self.icon.set_position(x,y)
+  self.text.set_position(x,y+128.0*1.10)
+  pass
+
+ def fade_in_completed(transition, self):
+  if self.rect.get_transition("fade_in"):
+   self.rect.remove_transition("fade_in")
+  self.rect.set_opacity(255)
+  pass
+ def fade_out_completed(transition, self):
+  print("fade_out_completed")
+  if self.rect.get_transition("fade_out"):
+   self.rect.remove_transition("fade_out")
+  self.rect.set_opacity(0)
+  pass
+
+ def button_press_handler(widget, event, self):
+  if event.button == Clutter.BUTTON_PRIMARY:
+   subprocess.call(shlex.split(self.exe))
+  pass
+ pass
+
 class apps_handler:
  def _get_all_desktop_files(self, path):
   ret = list()
@@ -36,92 +145,104 @@ class apps_handler:
    l += self._get_all_desktop_files(os.path.join(HOME, u'.local/share/applications'))
   for f in l:
    de = DesktopEntry(f)
-   if de.getType() == u"Application":
-    self._apps.append(de)
-  self._apps.sort(key=lambda x: x.getName().lower())
+   if de.getType() == u"Application" and not de.getHidden():
+    self._apps.append(apps_entry(de))
+  self._apps.sort(key=lambda x: x.name)
   pass
 
  def filter_apps(self, patern):
   p = re.compile(patern.lower())
   ret = list()
   for de in self._apps:
-   if p.search(de.getName().lower()):
-    ret.append((de.getName(),self.get_icon_actor(de)))
-   elif p.search(de.getGenericName().lower()):
-    ret.append((de.getName(),self.get_icon_actor(de)))
-   elif p.search(de.getComment().lower()):
-    ret.append((de.getName(),self.get_icon_actor(de)))
+   if p.search(de.name):
+    ret.append(de)
+   elif p.search(de.generic_name):
+    ret.append(de)
+   elif p.search(de.comment):
+    ret.append(de)
   return ret
 
- def get_icon_actor(self, de, size = 128):
-  icon_name = de.getIcon()
-  icon_path = getIconPath(icon_name, size)
-  if not icon_path:
-   icon_path = "apps.svg"
-  if not de in self._icon_actor_cache:
-   self._icon_actor_cache[de] = Clutter.Texture.new_from_file(icon_path)
-  return self._icon_actor_cache[de]
+ def hide_all(self):
+  for x in self._apps:
+   x.hide()
+
  pass
 
 
 def key_press_handler(widget, event, data):
  print(event.keyval)
- if event.keyval == 65307:
+ if event.keyval == Clutter.KEY_Escape:
   Clutter.main_quit()
  pass
 
 def button_press_handler(widget, event, data):
+ global apps_list
  widget = stage.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
  if widget == intext:
   stage.set_key_focus(intext)
  else:
-  stage.set_key_focus(intext)
+  stage.set_key_focus(intext)  
+
+
+ pass
+
+def motion_handler(widget, event, data):
+ global apps_list
+ widget = stage.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
+ if type(widget) == type(intext):
+  widget.set_color(Clutter.Color.new(255,255,0,255))
+ 
+ layout = launcher_layout(len(apps_list))
+ c = floor((event.x-layout.left_margin)/(layout.size*1.3))
+ r = floor((event.y-layout.y_offset-layout.top_margin)/(layout.size*1.5*1.3))
+ if c >= 0 and c < layout.columns and r >= 0 and r < layout.rows:
+  selected_rect.set_position(c*layout.size*1.3+layout.left_margin-layout.size*0.15,r*1.5*1.3*layout.size+layout.y_offset+layout.top_margin-layout.size*0.15)
+ return False
  pass
 
 current_actor = list()
 apps_list = list()
+
+class launcher_layout:
+ def __init__(self, napps):
+   self.size = 128.0
+   self.y_offset = intext.get_height()
+   self.width = stage.get_width()
+   self.height = stage.get_height() - self.y_offset
+   self.columns = int(floor(self.width/(self.size*1.3)))
+   self.rows = int(floor(self.height/(self.size*1.5*1.3)))
+   self.left_margin = (self.width-(self.columns*self.size*1.3))/2.0
+   self.top_margin = (self.height-(self.rows*self.size*1.5*1.3))/2.0
+   npages = int(floor(napps/self.columns*self.rows)+1.0)
+ pass
 
 def handle_text_changed(widget, data):
  global apps
  global apps_list
  global current_actor
 
- y_offset = intext.get_height()
+ apps.hide_all()
 
- size = 128.0
- #outtext.set_text(get_apps_string(widget.get_text()))
+ apps_list = apps.filter_apps(widget.get_text())
+ layout = launcher_layout(len(apps_list))
 
- for a in current_actor:
-  stage.remove_actor(a)
-
- width = stage.get_width()
- height = stage.get_height() - y_offset
-
- columns = int(floor(width/(size*1.3)))
- rows = int(floor(height/(size*1.5*1.3)))
-
- npages = int(floor(len(apps_list)/columns*rows)+1.0)
+ if widget.get_text() == u"":
+  notext.show()
+ else:
+  notext.hide()
 
  current_actor = list()
- apps_list = apps.filter_apps(widget.get_text())
-
- for i in range(0, columns*rows):
+ 
+ for i in range(0, layout.columns*layout.rows):
   if i >= len(apps_list):
    break
-  c = i - floor(i / columns)*columns
-  l = floor(i / columns)
-  name, icon = apps_list[i]
-  icon_actor = icon
-  icon_actor.set_position(c*size*1.3,l*1.5*1.3*size+y_offset)
-  icon_actor.set_size(size,size)
-  text_actor = Clutter.Text.new_full(font, name, Clutter.Color.new(0,255,0,255))
-  text_actor.set_position(c*size*1.3,l*1.5*1.3*size+size+y_offset)
-  text_actor.set_width(size)
-  text_actor.set_ellipsize(Pango.EllipsizeMode.END)
-  stage.add_actor(icon_actor)
-  stage.add_actor(text_actor)
-  current_actor.append(icon_actor)
-  current_actor.append(text_actor)
+  c = i - floor(i / layout.columns)*layout.columns
+  l = floor(i / layout.columns)
+  a = apps_list[i]
+  a.set_position(c*layout.size*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.y_offset+layout.top_margin)
+  #a.text.set_position(c*layout.size*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.size+layout.y_offset+layout.top_margin)
+  a.show()
+  current_actor.append(a)
  pass
 
 if __name__ == '__main__':
@@ -131,20 +252,29 @@ if __name__ == '__main__':
  stage.set_user_resizable(True)
  stage.set_title("page-launcher")
  stage.set_use_alpha(True)
- stage.set_opacity(0)
- stage.set_color(Clutter.Color.new(0,0,0,128))
- 
- font = "Sans 20"
- green = Clutter.Color.new(255,0,0,255) # red,green,blue,alpha
- intext = Clutter.Text.new_full(font, "", green)
+ stage.set_opacity(128)
+ stage.set_color(Clutter.Color.new(32,32,32,128))
+
+ notext = Clutter.Text.new_full(font_entry, u"Enter Text Here", Clutter.Color.new(128,128,128,255))
+ stage.add_child(notext)
+ notext.show()
+ intext = Clutter.Text.new_full(font_entry, u"", color_entry)
  intext.set_editable(True)
  intext.set_selectable(True)
  intext.set_activatable(True)
- Clutter.Container.add_actor(stage, intext)
+ stage.add_child(intext)
+ intext.show()
+
+ selected_rect = Clutter.Rectangle.new()
+ selected_rect.set_size(128.0*1.3,128.0*1.3*1.5)
+ selected_rect.set_color(Clutter.Color.new(128,128,128,128))
+ selected_rect.hide()
+ stage.add_child(selected_rect)
 
  apps = apps_handler()
 
- handle_text_changed(intext, None)
+ apps.hide_all()
+ #handle_text_changed(intext, None)
 
  # Adding a rectangle
  #transparentBlue = Clutter.Color.new(0,0,255,100)
@@ -160,13 +290,13 @@ if __name__ == '__main__':
  stage.set_key_focus(intext)
 
  #stage.connect('button-press-event', lambda x, y: print("pressed"))
- stage.connect('button-release-event', button_press_handler, None)
+ #stage.connect('button-release-event', button_press_handler, None)
  stage.connect('key-press-event', key_press_handler, None)
- #stage.connect('motion-event', lambda x, y: print("motion"))
+ #stage.connect('motion-event', motion_handler, None)
  stage.connect('destroy', lambda x: Clutter.main_quit())
 
  intext.connect('text-changed', handle_text_changed, None)
 
- stage.show_all()
+ stage.show()
  Clutter.main()
 
