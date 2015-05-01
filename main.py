@@ -255,6 +255,14 @@ def handle_text_changed(widget, data):
   current_actor.append(a)
  pass
 
+def activate_handler(widget, data):
+ stage.set_key_focus(intext)
+ pass
+
+def desactivate_handler(widget, data):
+ stage.hide()
+ pass
+
 # dbus model : dbus have object and interface.
 # object name has form : /x/y/object_name
 # interface name has form: x.y.interface_name
@@ -335,7 +343,8 @@ if __name__ == '__main__':
  stage.connect('key-press-event', key_press_handler, None)
  #stage.connect('motion-event', motion_handler, None)
  stage.connect('destroy', lambda x: Clutter.main_quit())
-
+ stage.connect('deactivate', desactivate_handler, None)
+ stage.connect('activate', activate_handler, None)
  intext.connect('text-changed', handle_text_changed, None)
 
  stage.show()
