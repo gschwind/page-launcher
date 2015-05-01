@@ -26,7 +26,6 @@ font_entry = "Sans Bold 30"
 color_entry = Clutter.Color.new(255,255,255,255) # red,green,blue,alpha
 
 
-
 class apps_entry:
  def __init__(self, de):
   size = 128.0
@@ -63,16 +62,12 @@ class apps_entry:
   pass
 
  def enter_handler(widget, event, self):
-  print("enter")
-  #self.rect.set_opacity(255)
   if self.rect.get_transition("fade_out"):
    self.rect.remove_transition("fade_out")
   if not self.rect.get_transition("fade_in"):
    self.rect.add_transition("fade_in", self.fade_in_transition)
   return True
  def leave_handler(widget, event, self):
-  print("leave")
-  #self.rect.set_opacity(0)
   if self.rect.get_transition("fade_in"):
    self.rect.remove_transition("fade_in")
   if not self.rect.get_transition("fade_out"):
@@ -113,7 +108,6 @@ class apps_entry:
   self.rect.set_opacity(255)
   pass
  def fade_out_completed(transition, self):
-  print("fade_out_completed")
   if self.rect.get_transition("fade_out"):
    self.rect.remove_transition("fade_out")
   self.rect.set_opacity(0)
@@ -121,7 +115,11 @@ class apps_entry:
 
  def button_press_handler(widget, event, self):
   if event.button == Clutter.BUTTON_PRIMARY:
-   subprocess.call(shlex.split(self.exe))
+   self.call()
+  pass
+
+ def call(self):
+  subprocess.Popen(shlex.split(self.exe))
   pass
  pass
 
@@ -170,9 +168,12 @@ class apps_handler:
 
 
 def key_press_handler(widget, event, data):
- print(event.keyval)
  if event.keyval == Clutter.KEY_Escape:
   Clutter.main_quit()
+ elif event.keyval == Clutter.KEY_Return:
+  if len(apps_list) == 1:
+   apps_list[0].call()
+ return False
  pass
 
 def button_press_handler(widget, event, data):
@@ -240,7 +241,6 @@ def handle_text_changed(widget, data):
   l = floor(i / layout.columns)
   a = apps_list[i]
   a.set_position(c*layout.size*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.y_offset+layout.top_margin)
-  #a.text.set_position(c*layout.size*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.size+layout.y_offset+layout.top_margin)
   a.show()
   current_actor.append(a)
  pass
@@ -262,6 +262,7 @@ if __name__ == '__main__':
  intext.set_editable(True)
  intext.set_selectable(True)
  intext.set_activatable(True)
+ intext.connect("key-press-event", key_press_handler, None)
  stage.add_child(intext)
  intext.show()
 
@@ -274,19 +275,6 @@ if __name__ == '__main__':
  apps = apps_handler()
 
  apps.hide_all()
- #handle_text_changed(intext, None)
-
- # Adding a rectangle
- #transparentBlue = Clutter.Color.new(0,0,255,100)
- #rectangle = Clutter.Rectangle.new_with_color(transparentBlue)
- #rectangle.set_size(150,50)
- #Clutter.Container.add_actor(stage, rectangle)
-
- # Adding a texture
- #picture = Clutter.Texture.new_from_file("flor.jpg")
- #picture.set_size( 400,400) 
- #Clutter.Container.add_actor( stage, picture)
-
  stage.set_key_focus(intext)
 
  #stage.connect('button-press-event', lambda x, y: print("pressed"))
