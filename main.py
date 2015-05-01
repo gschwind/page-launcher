@@ -16,6 +16,10 @@ from gi.repository import Pango
 from xdg.IconTheme import getIconPath
 from xdg.DesktopEntry import DesktopEntry
 
+import dbus
+import dbus.service
+from dbus.mainloop.glib import DBusGMainLoop
+
 import shlex
 import subprocess
 
@@ -81,8 +85,12 @@ class apps_entry:
    icon_path = gtk_icon_info.get_filename()
   else:
    icon_path = getIconPath(icon_name, size)
-   if not icon_path:
-    icon_path = "apps.svg"
+  if not icon_path:
+   gtk_icon_info = icon_theme.lookup_icon("exec", 128, 0)
+   if gtk_icon_info:
+    icon_path = gtk_icon_info.get_filename()
+   else:
+    icon_path = getIconPath(icon_name, size)
   return Clutter.Texture.new_from_file(icon_path)
 
  def show(self):
@@ -116,6 +124,7 @@ class apps_entry:
  def button_press_handler(widget, event, self):
   if event.button == Clutter.BUTTON_PRIMARY:
    self.call()
+   stage.hide()
   pass
 
  def call(self):
@@ -169,10 +178,11 @@ class apps_handler:
 
 def key_press_handler(widget, event, data):
  if event.keyval == Clutter.KEY_Escape:
-  Clutter.main_quit()
+  stage.hide()
  elif event.keyval == Clutter.KEY_Return:
   if len(apps_list) == 1:
    apps_list[0].call()
+   stage.hide()
  return False
  pass
 
@@ -245,9 +255,52 @@ def handle_text_changed(widget, data):
   current_actor.append(a)
  pass
 
+# dbus model : dbus have object and interface.
+# object name has form : /x/y/object_name
+# interface name has form: x.y.interface_name
+# an object can implement severals interfases
+# interfaces can be used by severrals object.
+class DBusWidget(dbus.service.Object):
+ interface_name = "org.page.launcher"
+ object_name = "/org/page/launcher"
+ def __init__(self):
+  session_bus = dbus.SessionBus()
+  dbus_name = dbus.service.BusName("org.page.launcher", session_bus)
+  dbus.service.Object.__init__(self, dbus_name, "/org/page/launcher")
+
+ @dbus.service.method("org.page.launcher", in_signature='', out_signature='')
+ def map(self):
+  intext.set_text(u"")
+  stage.show()
+  stage.set_key_focus(intext)
+  pass
+ 
+ @dbus.service.method("org.page.launcher", in_signature='', out_signature='')
+ def quit(self):
+  Clutter.main_quit()
+  pass
+ pass
+
 if __name__ == '__main__':
  Clutter.init(sys.argv)
  
+ # check if page-launcher is already running
+ loop = DBusGMainLoop(set_as_default=True)
+ bus = dbus.SessionBus()
+ try:
+  remote_object = bus.get_object(DBusWidget.interface_name, DBusWidget.object_name)
+ except dbus.DBusException:
+  remote_object = None
+
+ # If the object exist just active the running launcher
+ if remote_object:
+  iface = dbus.Interface(remote_object, DBusWidget.interface_name)
+  iface.map()
+  sys.exit(0)
+
+ # create the object dbus listenner
+ dbus_launcher = DBusWidget()
+
  stage = Clutter.Stage()
  stage.set_user_resizable(True)
  stage.set_title("page-launcher")
