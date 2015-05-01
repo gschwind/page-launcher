@@ -197,19 +197,19 @@ def button_press_handler(widget, event, data):
 
  pass
 
-def motion_handler(widget, event, data):
- global apps_list
- widget = stage.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
- if type(widget) == type(intext):
-  widget.set_color(Clutter.Color.new(255,255,0,255))
- 
- layout = launcher_layout(len(apps_list))
- c = floor((event.x-layout.left_margin)/(layout.size*1.3))
- r = floor((event.y-layout.y_offset-layout.top_margin)/(layout.size*1.5*1.3))
- if c >= 0 and c < layout.columns and r >= 0 and r < layout.rows:
-  selected_rect.set_position(c*layout.size*1.3+layout.left_margin-layout.size*0.15,r*1.5*1.3*layout.size+layout.y_offset+layout.top_margin-layout.size*0.15)
- return False
- pass
+#def motion_handler(widget, event, data):
+# global apps_list
+# widget = stage.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
+# if type(widget) == type(intext):
+#  widget.set_color(Clutter.Color.new(255,255,0,255))
+# 
+# layout = launcher_layout(len(apps_list))
+# c = floor((event.x-layout.left_margin)/(layout.size*1.3))
+# r = floor((event.y-layout.y_offset-layout.top_margin)/(layout.size*1.5*1.3))
+# if c >= 0 and c < layout.columns and r >= 0 and r < layout.rows:
+#  selected_rect.set_position(c*layout.size*1.3+layout.left_margin-layout.size*0.15,r*1.5*1.3*layout.size+layout.y_offset+layout.top_margin-layout.size*0.15)
+# return False
+# pass
 
 current_actor = list()
 apps_list = list()
@@ -234,10 +234,13 @@ def handle_text_changed(widget, data):
 
  apps.hide_all()
 
- apps_list = apps.filter_apps(widget.get_text())
+ text = widget.get_text()
+ if not text:
+  text = u""
+ apps_list = apps.filter_apps(text)
  layout = launcher_layout(len(apps_list))
 
- if widget.get_text() == u"":
+ if text == u"":
   notext.show()
  else:
   notext.hide()
