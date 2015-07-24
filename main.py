@@ -9,6 +9,9 @@ from math import *
 from io import StringIO
 
 from gi.repository import Gtk
+from gi.repository import Gdk
+from gi.repository import GdkX11
+from gi.repository import ClutterGdk
 from gi.repository import Clutter
 from gi.repository import GtkClutter
 from gi.repository import Pango
@@ -48,30 +51,30 @@ class apps_entry:
   self.rect.set_color(Clutter.Color.new(128,128,128,128))
   self.rect.set_reactive(True)
   self.rect.set_opacity(0)
-  self.rect.connect("enter-event", apps_entry.enter_handler, self)
-  self.rect.connect("leave-event", apps_entry.leave_handler, self)
+  self.rect.connect("enter-event", self.enter_handler, self)
+  self.rect.connect("leave-event", self.leave_handler, self)
   self.rect.connect("button-press-event", apps_entry.button_press_handler, self)
   self.fade_in_transition = Clutter.PropertyTransition.new("opacity")
   self.fade_in_transition.set_duration(100)
   self.fade_in_transition.set_to(255)
-  self.fade_in_transition.connect("completed", apps_entry.fade_in_completed, self)
+  self.fade_in_transition.connect("completed", self.fade_in_completed, self)
   self.fade_out_transition = Clutter.PropertyTransition.new("opacity")
   self.fade_out_transition.set_duration(2000)
   self.fade_out_transition.set_to(0)
-  self.fade_out_transition.connect("completed", apps_entry.fade_out_completed, self)
+  self.fade_out_transition.connect("completed", self.fade_out_completed, self)
   stage.add_child(self.rect)
   stage.add_child(self.icon)
   stage.add_child(self.text)
   self.hide()
   pass
 
- def enter_handler(widget, event, self):
+ def enter_handler(self, widget, event, self1):
   if self.rect.get_transition("fade_out"):
    self.rect.remove_transition("fade_out")
   if not self.rect.get_transition("fade_in"):
    self.rect.add_transition("fade_in", self.fade_in_transition)
   return True
- def leave_handler(widget, event, self):
+ def leave_handler(self, widget, event, self1):
   if self.rect.get_transition("fade_in"):
    self.rect.remove_transition("fade_in")
   if not self.rect.get_transition("fade_out"):
@@ -85,7 +88,8 @@ class apps_entry:
    icon_path = gtk_icon_info.get_filename()
   else:
    icon_path = getIconPath(icon_name, size)
-  if not icon_path:
+
+  if (icon_path and re.match("^.*\.svg$", icon_path)) or not icon_path:
    gtk_icon_info = icon_theme.lookup_icon("exec", 128, 0)
    if gtk_icon_info:
     icon_path = gtk_icon_info.get_filename()
@@ -110,12 +114,12 @@ class apps_entry:
   self.text.set_position(x,y+128.0*1.10)
   pass
 
- def fade_in_completed(transition, self):
+ def fade_in_completed(self, transition, self1):
   if self.rect.get_transition("fade_in"):
    self.rect.remove_transition("fade_in")
   self.rect.set_opacity(255)
   pass
- def fade_out_completed(transition, self):
+ def fade_out_completed(self, transition, self1):
   if self.rect.get_transition("fade_out"):
    self.rect.remove_transition("fade_out")
   self.rect.set_opacity(0)
@@ -298,6 +302,7 @@ class DBusWidget(dbus.service.Object):
  pass
 
 if __name__ == '__main__':
+ Clutter.set_windowing_backend(Clutter.WINDOWING_GDK)
  Clutter.init(sys.argv)
  
  # check if page-launcher is already running
@@ -316,7 +321,6 @@ if __name__ == '__main__':
 
  # create the object dbus listenner
  dbus_launcher = DBusWidget()
-
  stage = Clutter.Stage()
  stage.set_user_resizable(True)
  stage.set_title("page-launcher")
@@ -351,11 +355,33 @@ if __name__ == '__main__':
  stage.connect('key-press-event', key_press_handler, None)
  #stage.connect('motion-event', motion_handler, None)
  stage.connect('destroy', lambda x: Clutter.main_quit())
- stage.connect('deactivate', desactivate_handler, None)
+ #stage.connect('deactivate', desactivate_handler, None)
  stage.connect('allocation-changed', allocation_changed_handler, None)
  stage.connect('activate', activate_handler, None)
  intext.connect('text-changed', handle_text_changed, None)
 
+ toto= Clutter.get_default_backend()
+ print(toto)
  stage.show()
+#.create_resource_object('window', winId)
+
+ windows = ClutterGdk.get_stage_window(stage)
+ windows.move_resize(0,0,100,800)
+ windows.set_type_hint(Gdk.WindowTypeHint.DOCK)
+ windows.stick()
+ geo = Gdk.Geometry()
+ geo.min_width=300
+ geo.min_height=800
+ geo.max_width=300
+ geo.max_height=800
+ geo.base_width=300
+ geo.base_height=800
+ windows.set_geometry_hints(geo, Gdk.WindowHints.MIN_SIZE | Gdk.WindowHints.MAX_SIZE | Gdk.WindowHints.BASE_SIZE)
+ #_display = windows.get_display()
+ #_win = _display.create_resource_object('window', windows.get_xid())
+ #_win.change_property(_display.intern_atom('_NET_WM_STRUT'), _display.intern_atom('CARDINAL'),32, [left,right,top,bottom])
+ #_win.change_property(_display.intern_atom('_NET_WM_DESKTOP'), _display.intern_atom('CARDINAL'),32, [0xffffffff])
+ print(windows)
+ #sys.exit(-1)
  Clutter.main()
 
