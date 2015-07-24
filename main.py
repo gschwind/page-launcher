@@ -16,6 +16,9 @@ from gi.repository import Clutter
 from gi.repository import GtkClutter
 from gi.repository import Pango
 
+import Xlib
+from Xlib import display as D
+
 from xdg.IconTheme import getIconPath
 from xdg.DesktopEntry import DesktopEntry
 
@@ -321,67 +324,156 @@ if __name__ == '__main__':
 
  # create the object dbus listenner
  dbus_launcher = DBusWidget()
+
  stage = Clutter.Stage()
- stage.set_user_resizable(True)
- stage.set_title("page-launcher")
- stage.set_use_alpha(True)
- stage.set_opacity(128)
- stage.set_color(Clutter.Color.new(32,32,32,128))
-
- notext = Clutter.Text.new_full(font_entry, u"Enter Text Here", Clutter.Color.new(128,128,128,255))
- stage.add_child(notext)
- notext.show()
  intext = Clutter.Text.new_full(font_entry, u"", color_entry)
- intext.set_editable(True)
- intext.set_selectable(True)
- intext.set_activatable(True)
- intext.connect("key-press-event", key_press_handler, None)
- stage.add_child(intext)
- intext.show()
-
- selected_rect = Clutter.Rectangle.new()
- selected_rect.set_size(128.0*1.3,128.0*1.3*1.5)
- selected_rect.set_color(Clutter.Color.new(128,128,128,128))
- selected_rect.hide()
- stage.add_child(selected_rect)
-
  apps = apps_handler()
+ notext = Clutter.Text.new_full(font_entry, u"Enter Text Here", Clutter.Color.new(128,128,128,255))
+ 
+ #windows.set_type_hint(Gdk.WindowTypeHint.DOCK)
+ #windows.stick()
+ #geo = Gdk.Geometry()
+ #geo.min_width=300
+ #geo.min_height=800
+ #geo.max_width=300
+ #geo.max_height=800
+ #geo.base_width=300
+ #geo.base_height=800
+ #windows.set_geometry_hints(geo, Gdk.WindowHints.MIN_SIZE | Gdk.WindowHints.MAX_SIZE | Gdk.WindowHints.BASE_SIZE)
 
- apps.hide_all()
- stage.set_key_focus(intext)
-
- #stage.connect('button-press-event', lambda x, y: print("pressed"))
- #stage.connect('button-release-event', button_press_handler, None)
- stage.connect('key-press-event', key_press_handler, None)
- #stage.connect('motion-event', motion_handler, None)
- stage.connect('destroy', lambda x: Clutter.main_quit())
- #stage.connect('deactivate', desactivate_handler, None)
- stage.connect('allocation-changed', allocation_changed_handler, None)
- stage.connect('activate', activate_handler, None)
- intext.connect('text-changed', handle_text_changed, None)
-
- toto= Clutter.get_default_backend()
- print(toto)
- stage.show()
-#.create_resource_object('window', winId)
-
- windows = ClutterGdk.get_stage_window(stage)
- windows.move_resize(0,0,100,800)
- windows.set_type_hint(Gdk.WindowTypeHint.DOCK)
- windows.stick()
- geo = Gdk.Geometry()
- geo.min_width=300
- geo.min_height=800
- geo.max_width=300
- geo.max_height=800
- geo.base_width=300
- geo.base_height=800
- windows.set_geometry_hints(geo, Gdk.WindowHints.MIN_SIZE | Gdk.WindowHints.MAX_SIZE | Gdk.WindowHints.BASE_SIZE)
- #_display = windows.get_display()
+ #print windows.get_xid()
+ #left=0
+ #right=300
+ #top = 0 
+ #bottom=800
+ #_display = D.Display()
  #_win = _display.create_resource_object('window', windows.get_xid())
  #_win.change_property(_display.intern_atom('_NET_WM_STRUT'), _display.intern_atom('CARDINAL'),32, [left,right,top,bottom])
  #_win.change_property(_display.intern_atom('_NET_WM_DESKTOP'), _display.intern_atom('CARDINAL'),32, [0xffffffff])
- print(windows)
+ #_win.change_property(_display.intern_atom('_NET_WM_WINDOW_TYPE'), _display.intern_atom('CARDINAL'),32, [_display.intern_atom("_NET_WM_WINDOW_TYPE_DOCK")])
+ #print(windows)
  #sys.exit(-1)
- Clutter.main()
+ #Clutter.main()
+
+class BaseView:
+#----------------------------------------------------------------------------
+    #------------------------------------------------------
+ def __init__(self, display, x, y, width, height):
+        resolution = display.screen().root.get_geometry()
+        self.screen_width_px = resolution.width
+        self.screen_height_px = resolution.height        
+        self.display = display
+        self.x       = x
+        self.y       = y
+        self.width   = width
+        self.height  = self.screen_height_px
+        self._init_x_atoms()
+        self._init_clutter()
+        self.screen  = display.screen()
+        self._set_props()
+        self.set_struts(500,500,500,0,0,0,0,0,0,0,0,0)
+        self.window.map()
+        self.display.flush()
+
+ def _init_clutter(self):
+        stage.set_user_resizable(True)
+        stage.set_title("page-launcher")
+        stage.set_use_alpha(True)
+        stage.set_opacity(128)
+        stage.set_color(Clutter.Color.new(32,32,32,128))
+
+
+        stage.add_child(notext)
+        notext.show()
+        intext.set_editable(True)
+        intext.set_selectable(True)
+        intext.set_activatable(True)
+        intext.connect("key-press-event", key_press_handler, None)
+        stage.add_child(intext)
+        intext.show()
+
+        selected_rect = Clutter.Rectangle.new()
+        selected_rect.set_size(128.0*1.3,128.0*1.3*1.5)
+        selected_rect.set_color(Clutter.Color.new(128,128,128,128))
+        selected_rect.hide()
+        stage.add_child(selected_rect)
+
+
+        apps.hide_all()
+        stage.set_key_focus(intext)
+
+        #stage.connect('button-press-event', lambda x, y: print("pressed"))
+        #stage.connect('button-release-event', button_press_handler, None)
+        stage.connect('key-press-event', key_press_handler, None)
+        #stage.connect('motion-event', motion_handler, None)
+        stage.connect('destroy', lambda x: Clutter.main_quit())
+        #stage.connect('deactivate', desactivate_handler, None)
+        stage.connect('allocation-changed', allocation_changed_handler, None)
+        #stage.connect('activate', activate_handler, None)
+        intext.connect('text-changed', handle_text_changed, None)
+
+        #toto= Clutter.get_default_backend()
+        #print(toto)
+        stage.show()
+        #.create_resource_object('window', winId)
+
+        self.windowsClutter = ClutterGdk.get_stage_window(stage)
+        self.windowsClutter.move_resize(0,0,100,800)
+        #print(windows.get_xid())
+        self.window = self.display.create_resource_object('window', self.windowsClutter.get_xid())
+    #-------------------------------------
+ def _init_x_atoms(self):
+    #-------------------------------------
+        self._ABOVE                   = self.display.intern_atom("_NET_WM_STATE_ABOVE")
+        self._BELOW                   = self.display.intern_atom("_NET_WM_STATE_BELOW")
+        self._BLACKBOX                = self.display.intern_atom("_BLACKBOX_ATTRIBUTES")
+        self._CHANGE_STATE            = self.display.intern_atom("WM_CHANGE_STATE")
+        self._CLIENT_LIST             = self.display.intern_atom("_NET_CLIENT_LIST")
+        self._CURRENT_DESKTOP         = self.display.intern_atom("_NET_CURRENT_DESKTOP")
+        self._DESKTOP                 = self.display.intern_atom("_NET_WM_DESKTOP")
+        self._DESKTOP_COUNT           = self.display.intern_atom("_NET_NUMBER_OF_DESKTOPS")
+        self._DESKTOP_NAMES           = self.display.intern_atom("_NET_DESKTOP_NAMES")
+        self._HIDDEN                  = self.display.intern_atom("_NET_WM_STATE_HIDDEN")
+        self._ICON                    = self.display.intern_atom("_NET_WM_ICON")
+        self._NAME                    = self.display.intern_atom("_NET_WM_NAME")
+        self._RPM                     = self.display.intern_atom("_XROOTPMAP_ID")
+        self._SHADED                  = self.display.intern_atom("_NET_WM_STATE_SHADED")
+        self._SHOWING_DESKTOP         = self.display.intern_atom("_NET_SHOWING_DESKTOP")
+        self._SKIP_PAGER              = self.display.intern_atom("_NET_WM_STATE_SKIP_PAGER")
+        self._SKIP_TASKBAR            = self.display.intern_atom("_NET_WM_STATE_SKIP_TASKBAR")
+        self._STATE                   = self.display.intern_atom("_NET_WM_STATE")
+        self._STICKY                  = self.display.intern_atom("_NET_WM_STATE_STICKY")
+        self._STRUT                   = self.display.intern_atom("_NET_WM_STRUT")
+        self._STRUTP                  = self.display.intern_atom("_NET_WM_STRUT_PARTIAL")
+        self._WMSTATE                 = self.display.intern_atom("WM_STATE")
+        self._WIN_STATE               = self.display.intern_atom("_WIN_STATE")
+        self._MOTIF_WM_HINTS          = self.display.intern_atom("_MOTIF_WM_HINTS")
+        self._NET_WM_WINDOW_TYPE      = self.display.intern_atom("_NET_WM_WINDOW_TYPE")
+        self._NET_WM_WINDOW_TYPE_DOCK = self.display.intern_atom("_NET_WM_WINDOW_TYPE_DOCK")
+
+ def _set_props(self):
+        print("OUOU")
+        self.window.set_wm_hints(flags=(Xlib.Xutil.InputHint | Xlib.Xutil.StateHint), input=0, initial_state=1)
+        self.window.set_wm_normal_hints(flags=(
+                Xlib.Xutil.PPosition |
+                Xlib.Xutil.PMaxSize |
+                Xlib.Xutil.PMinSize),
+            min_width=self.width, min_height=self.height,
+            max_width=self.width, max_height=self.height)
+
+        self.window.change_property(self._WIN_STATE, Xlib.Xatom.CARDINAL,32,[1])
+        self.window.change_property(self._MOTIF_WM_HINTS, self._MOTIF_WM_HINTS, 32, [0x2, 0x0, 0x0, 0x0, 0x0])
+        self.window.change_property(self._DESKTOP, Xlib.Xatom.CARDINAL, 32, [0xffffffff])
+        self.window.change_property(self._NET_WM_WINDOW_TYPE, Xlib.Xatom.ATOM, 32, [self._NET_WM_WINDOW_TYPE_DOCK])
+
+ def set_struts(self, left_start, left, left_end, right_start, right, right_end, top_start, top, top_end, bottom_start, bottom, bottom_end):
+        self.window.change_property(self._STRUT, Xlib.Xatom.CARDINAL, 32, [left, right, top, bottom])
+        self.window.change_property(self._STRUTP, Xlib.Xatom.CARDINAL, 32, [left, right, top, bottom, left_start, left_end, right_start, right_end, top_start, top_end, bottom_start, bottom_end])
+
+
+ def run(self):
+        Clutter.main()
+
+launcher = BaseView(D.Display(), 0, 0 ,500,600)
+launcher.run()
 
