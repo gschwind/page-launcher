@@ -22,8 +22,8 @@ def pkgconfig(*packages, **kw):
    kw[k] = list(set(kw[k]))
  return kw
 
-params = pkgconfig('pygobject-3.0')
-params['extra_compile_args'] = ['-std=c99']
+params = pkgconfig('pygobject-3.0', 'clutter-glx-1.0', 'gdk-x11-3.0')
+params['extra_compile_args'] = ['-std=c99 -ggdb']
 module1 = Extension('PageLauncherHook', sources = ['page_launcher_hook.c'], **params)
 
 setup (name = 'PageLauncherHook',

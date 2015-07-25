@@ -1,6 +1,7 @@
-
 #include <Python.h>
 #include <pygobject.h>
+#include <clutter/clutter.h>
+#include <gdk/gdk.h>
 
 #include <stdio.h>
 
@@ -24,12 +25,66 @@ static PyObject * py_print(PyObject * self, PyObject * args) {
 	Py_RETURN_NONE;
 }
 
+static PyObject * py_print_type(PyObject * self, PyObject * args) {
+	PyObject * pyobj;
+	if (!PyArg_ParseTuple(args, "O", &pyobj))
+		return NULL;
+
+	if(pygobject_check(pyobj, pygobject_lookup_class(CLUTTER_TYPE_STAGE))) {
+		GObject * obj = pygobject_get(pyobj);
+		GType t = G_OBJECT_TYPE(obj);
+		printf("type = %s\n", g_type_name(t));
+	} else {
+		printf("unknown object\n");
+	}
+
+	Py_RETURN_NONE;
+}
+
+static PyObject * py_set_strut(PyObject * self, PyObject * args) {
+	PyObject * py_gdk_window;
+	PyObject * py_list;
+	if (!PyArg_ParseTuple(args, "OO", &py_gdk_window, &py_list))
+		return NULL;
+
+	if(!pygobject_check(py_gdk_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		return NULL;
+	}
+
+	if(!PyList_Check(py_list)) {
+		return NULL;
+	}
+
+	if(PyList_Size(py_list) != 4) {
+		return NULL;
+	}
+
+	long strut[4];
+	for(int i = 0; i < 4; ++i) {
+		PyObject * v = PyList_GetItem(py_list, i);
+		if(PyLong_Check(v)) {
+			strut[i] = PyLong_AsLong(v);
+		} else {
+			return NULL;
+		}
+	}
+
+	GdkAtom cardinal = gdk_atom_intern("CARDINAL", FALSE);
+	GdkAtom _net_wm_strut = gdk_atom_intern("_NET_WM_STRUT", FALSE);
+
+	gdk_property_change(GDK_WINDOW(pygobject_get(py_gdk_window)), _net_wm_strut, cardinal, 32, GDK_PROP_MODE_REPLACE, (guchar*)strut, 4);
+
+	Py_RETURN_NONE;
+}
+
 #define TPL_FUNCTION(name) {#name, py_##name, METH_VARARGS, "Not documented"}
 #define TPL_FUNCTION_DOC(name, doc) {#name, py_##name, METH_VARARGS, doc}
 
 static PyMethodDef methods[] =
 {
 	TPL_FUNCTION_DOC(print, "simple print for testing"),
+	TPL_FUNCTION_DOC(print_type, "Print the type of a GObject"),
+	TPL_FUNCTION_DOC(set_strut, "set _NET_WM_STRUT"),
 	{NULL, NULL, 0, NULL} // sentinel
 };
 
@@ -58,6 +113,8 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC
 PyInit_PageLauncherHook(void)
 {
+
+	pygobject_init(-1, -1, -1);
 
 	PyObject * m;
 	m = PyModule_Create(&moduledef);

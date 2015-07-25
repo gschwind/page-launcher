@@ -11,6 +11,8 @@ from math import *
 
 from io import StringIO
 
+
+from gi.repository import GObject
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GdkX11
@@ -19,7 +21,7 @@ from gi.repository import Clutter
 from gi.repository import GtkClutter
 from gi.repository import Pango
 
-import xcffib as xcb
+import PageLauncherHook
 
 from xdg.IconTheme import getIconPath
 from xdg.DesktopEntry import DesktopEntry
@@ -43,7 +45,8 @@ def sig_int_handler(n):
 
 
 class apps_entry:
- def __init__(self, de):
+ def __init__(self, parent, de):
+  self.parent = parent
   size = 128.0
   self.name = de.getName().lower()
   self.generic_name = de.getGenericName().lower()
@@ -57,7 +60,7 @@ class apps_entry:
   self.text.set_line_alignment(Pango.Alignment.CENTER)
   self.rect = Clutter.Rectangle.new()
   self.rect.set_size(128.0*1.2,128.0*1.2*1.5)
-  self.rect.set_color(Clutter.Color.new(128,128,128,128))
+  self.rect.set_color(Clutter.Color.new(255,255,255,128))
   self.rect.set_reactive(True)
   self.rect.set_opacity(0)
   self.rect.connect("enter-event", self.enter_handler, self)
@@ -71,9 +74,9 @@ class apps_entry:
   self.fade_out_transition.set_duration(2000)
   self.fade_out_transition.set_to(0)
   self.fade_out_transition.connect("completed", self.fade_out_completed, self)
-  stage.add_child(self.rect)
-  stage.add_child(self.icon)
-  stage.add_child(self.text)
+  self.parent.add_child(self.rect)
+  self.parent.add_child(self.icon)
+  self.parent.add_child(self.text)
   self.hide()
   pass
 
@@ -137,7 +140,7 @@ class apps_entry:
  def button_press_handler(widget, event, self):
   if event.button == Clutter.BUTTON_PRIMARY:
    self.call()
-   stage.hide()
+   self.parent.hide()
   pass
 
  def call(self):
@@ -154,7 +157,7 @@ class apps_handler:
      ret.append(os.path.join(rdir,f))
   return ret
 
- def __init__(self):
+ def __init__(self, stage):
   self._apps = list()
   self._rdsk = re.compile(u".*\.desktop$")
   self._icon_actor_cache = dict()
@@ -166,7 +169,7 @@ class apps_handler:
   for f in l:
    de = DesktopEntry(f)
    if de.getType() == u"Application" and not de.getHidden():
-    self._apps.append(apps_entry(de))
+    self._apps.append(apps_entry(stage, de))
   self._apps.sort(key=lambda x: x.name)
   pass
 
@@ -188,49 +191,10 @@ class apps_handler:
 
  pass
 
-
-def key_press_handler(widget, event, data):
- if event.keyval == Clutter.KEY_Escape:
-  stage.hide()
- elif event.keyval == Clutter.KEY_Return:
-  if len(apps_list) == 1:
-   apps_list[0].call()
-   stage.hide()
- return False
- pass
-
-def button_press_handler(widget, event, data):
- global apps_list
- widget = stage.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
- if widget == intext:
-  stage.set_key_focus(intext)
- else:
-  stage.set_key_focus(intext)  
-
-
- pass
-
-#def motion_handler(widget, event, data):
-# global apps_list
-# widget = stage.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
-# if type(widget) == type(intext):
-#  widget.set_color(Clutter.Color.new(255,255,0,255))
-# 
-# layout = launcher_layout(len(apps_list))
-# c = floor((event.x-layout.left_margin)/(layout.size*1.3))
-# r = floor((event.y-layout.y_offset-layout.top_margin)/(layout.size*1.5*1.3))
-# if c >= 0 and c < layout.columns and r >= 0 and r < layout.rows:
-#  selected_rect.set_position(c*layout.size*1.3+layout.left_margin-layout.size*0.15,r*1.5*1.3*layout.size+layout.y_offset+layout.top_margin-layout.size*0.15)
-# return False
-# pass
-
-current_actor = list()
-apps_list = list()
-
 class launcher_layout:
- def __init__(self, napps):
+ def __init__(self, stage, napps):
    self.size = 128.0
-   self.y_offset = intext.get_height()
+   self.y_offset = stage.intext.get_height()
    self.width = stage.get_width()
    self.height = stage.get_height() - self.y_offset
    self.columns = int(floor(self.width/(self.size*1.3)))
@@ -240,49 +204,6 @@ class launcher_layout:
    npages = int(floor(napps/self.columns*self.rows)+1.0)
  pass
 
-def handle_text_changed(widget, data):
- global apps
- global apps_list
- global current_actor
-
- apps.hide_all()
-
- text = widget.get_text()
- if not text:
-  text = u""
- apps_list = apps.filter_apps(text)
- layout = launcher_layout(len(apps_list))
-
- if text == u"":
-  notext.show()
- else:
-  notext.hide()
-
- current_actor = list()
- 
- for i in range(0, layout.columns*layout.rows):
-  if i >= len(apps_list):
-   break
-  c = i - floor(i / layout.columns)*layout.columns
-  l = floor(i / layout.columns)
-  a = apps_list[i]
-  a.set_position(c*layout.size*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.y_offset+layout.top_margin)
-  a.show()
-  current_actor.append(a)
- pass
-
-def activate_handler(widget, data):
- stage.set_key_focus(intext)
- pass
-
-def desactivate_handler(widget, data):
- stage.hide()
- pass
-
-def allocation_changed_handler(widget, box, flags, data):
- # indirectly update the layout:
- handle_text_changed(intext, data)
- pass
 
 # dbus model : dbus have object and interface.
 # object name has form : /x/y/object_name
@@ -310,7 +231,201 @@ class DBusWidget(dbus.service.Object):
   pass
  pass
 
+class DashView(Clutter.Stage):
+	def __init__(self, parent):
+		super().__init__()
+		self.parent = parent
+		self.set_user_resizable(False)
+		self.set_title("page-dash")
+		self.set_use_alpha(True)
+		self.set_opacity(200)
+		self.set_color(Clutter.Color.new(32,32,32,128))
+		self.set_scale(1.0, 1.0)
+		self.set_accept_focus(True)
+
+		self.notext = Clutter.Text.new_full(font_entry, u"Enter Text Here", Clutter.Color.new(128,128,128,255))
+		self.add_child(self.notext)
+		self.notext.show()
+		
+		
+		self.intext = Clutter.Text.new_full(font_entry, u"", color_entry)
+		self.apps = apps_handler(self)
+		self.intext.set_editable(True)
+		self.intext.set_selectable(True)
+		self.intext.set_activatable(True)
+		self.intext.connect("key-press-event", self.key_press_handler, None)
+		self.add_child(self.intext)
+		self.intext.show()
+
+		self.selected_rect = Clutter.Rectangle.new()
+		self.selected_rect.set_size(128.0*1.3,128.0*1.3*1.5)
+		self.selected_rect.set_color(Clutter.Color.new(128,128,128,128))
+		self.selected_rect.hide()
+		self.add_child(self.selected_rect)
+
+		self.apps.hide_all()
+		self.set_key_focus(self.intext)
+
+		self.connect('button-press-event', DashView.button_press_handler)
+		#stage.connect('button-release-event', button_press_handler, None)
+		self.connect('key-press-event', self.key_press_handler)
+		#stage.connect('motion-event', motion_handler, None)
+		self.connect('destroy', lambda x: Clutter.main_quit())
+		self.connect('deactivate', self.desactivate_handler, None)
+		self.connect('allocation-changed', self.allocation_changed_handler)
+		#stage.connect('activate', activate_handler, None)
+		self.intext.connect('text-changed', self.handle_text_changed)
+
+
+	def show(self):
+		print("Dash show")
+		super().show()
+		self.window = ClutterGdk.get_stage_window(self)
+		parent_window = ClutterGdk.get_stage_window(self.parent)
+		self.window.set_type_hint(Gdk.WindowTypeHint.DROPDOWN_MENU)
+		self.window.set_transient_for(parent_window)
+		self.window.move(32, 0)
+		root_height = self.window.get_screen().get_root_window().get_height()
+		self.set_size(500, root_height)
+		self.window.show()
+
+	def key_press_handler(self, event, data):
+		if event.keyval == Clutter.KEY_Escape:
+			self.hide()
+		elif event.keyval == Clutter.KEY_Return:
+			if len(self.apps_list) == 1:
+				self.apps_list[0].call()
+				self.hide()
+		return False
+
+	def button_press_handler(self, event):
+		widget = self.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
+		if widget == self.intext:
+			self.set_key_focus(self.intext)
+		else:
+			self.set_key_focus(self.intext)
+		pass
+
+
+	def handle_text_changed(self, data):
+		global current_actor
+		self.apps.hide_all()
+
+		text = self.intext.get_text()
+		if not text:
+			text = u""
+		self.apps_list = self.apps.filter_apps(text)
+		layout = launcher_layout(self, len(self.apps_list))
+		if text == u"":
+			self.notext.show()
+		else:
+			self.notext.hide()
+		self.current_actor = list()
+ 
+		for i in range(0, layout.columns*layout.rows):
+			if i >= len(self.apps_list):
+				break
+			c = i - floor(i / layout.columns)*layout.columns
+			l = floor(i / layout.columns)
+			a = self.apps_list[i]
+			a.set_position(c*layout.size*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.y_offset+layout.top_margin)
+			a.show()
+			self.current_actor.append(a)
+		pass
+
+	def activate_handler(self, data):
+		self.set_key_focus(self.intext)
+		pass
+
+	def desactivate_handler(self, data):
+		self.hide()
+		pass
+
+	def allocation_changed_handler(self, box, flags, data):
+		# indirectly update the layout:
+		self.handle_text_changed(data)
+		pass
+		
+	def hide(self):
+		print("Dash hide")
+		super().hide()
+
+#def motion_handler(widget, event, data):
+# global apps_list
+# widget = stage.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
+# if type(widget) == type(intext):
+#  widget.set_color(Clutter.Color.new(255,255,0,255))
+# 
+# layout = launcher_layout(len(apps_list))
+# c = floor((event.x-layout.left_margin)/(layout.size*1.3))
+# r = floor((event.y-layout.y_offset-layout.top_margin)/(layout.size*1.5*1.3))
+# if c >= 0 and c < layout.columns and r >= 0 and r < layout.rows:
+#  selected_rect.set_position(c*layout.size*1.3+layout.left_margin-layout.size*0.15,r*1.5*1.3*layout.size+layout.y_offset+layout.top_margin-layout.size*0.15)
+# return False
+# pass
+
+class PanelView(Clutter.Stage):
+	def __init__(self):
+		super().__init__()
+
+		# Manualy create the window to setup properties before mapping the window		
+		self._create_panel_window()
+		
+		display = ClutterGdk.get_default_display()
+		root_height = display.get_default_screen().get_root_window().get_height()
+
+		# tricks to create the window
+
+		ClutterGdk.set_stage_foreign(self, self.window)
+		self.window.set_type_hint(Gdk.WindowTypeHint.DOCK)
+		self.window.stick()
+		PageLauncherHook.set_strut(self.window, [32, 0, 0, 0])
+		self.set_size(32,root_height)
+		self.set_user_resizable(False)
+		self.set_title("page-panel")
+		self.set_use_alpha(True)
+		self.set_opacity(200)
+		self.set_color(Clutter.Color.new(32,32,32,128))
+		self.set_scale(1.0, 1.0)
+
+		self.dash = DashView(self)
+		self.connect('button-press-event', PanelView.button_press_handler)
+		self.show()
+		self.window.move(0,0)
+ 				
+
+	def button_press_handler(self, event):
+		if event.button == 1:
+			self.dash.show()
+			self.dash.window.focus(event.time)
+		elif event.button == 3:
+			Clutter.main_quit()
+
+	def run(self):
+		self.show()
+		Clutter.main()
+		
+	def _create_panel_window(self):
+		display = ClutterGdk.get_default_display()
+		root_height = display.get_default_screen().get_root_window().get_height()
+	
+		attr = Gdk.WindowAttr();
+		attr.title = "page-panel"
+		attr.width = 32
+		attr.height = root_height
+		attr.x = 0
+		attr.y = 0
+		attr.event_mask = 0
+		attr.window_type = Gdk.WindowType.TOPLEVEL
+		attr.visual = display.get_default_screen().get_rgba_visual()
+		self.window = Gdk.Window(None, attr,
+		 Gdk.WindowAttributesType.TITLE
+		|Gdk.WindowAttributesType.VISUAL
+		|Gdk.WindowAttributesType.X
+		|Gdk.WindowAttributesType.Y)
+
 if __name__ == '__main__':
+ Gdk.init(sys.argv)
  Clutter.set_windowing_backend(Clutter.WINDOWING_GDK)
  Clutter.init(sys.argv)
  
@@ -329,76 +444,8 @@ if __name__ == '__main__':
   sys.exit(0)
 
  # create the object dbus listenner
- #dbus_launcher = DBusWidget()
+ dbus_launcher = DBusWidget()
 
- panel_stage = Clutter.Stage()
- panel_stage.set_user_resizable(False)
- panel_stage.set_title("page-panel")
- panel_stage.set_use_alpha(True)
- panel_stage.set_opacity(200)
- panel_stage.set_color(Clutter.Color.new(32,32,32,128))
- panel_stage.set_scale(1.0, 1.0)
- panel_stage.show()
-
- panel_windows = ClutterGdk.get_stage_window(panel_stage)
- #panel_windows.move_resize(0,0,32,1280)
- panel_windows.set_type_hint(Gdk.WindowTypeHint.DOCK)
- panel_windows.stick()
- root_height = panel_windows.get_screen().get_root_window().get_height()
- panel_stage.set_size(32,root_height)
- print(dir(panel_windows))
- sys.exit(-1)
-
- stage = Clutter.Stage()
- stage.set_user_resizable(True)
- stage.set_title("page-launcher")
- stage.set_use_alpha(True)
- stage.set_opacity(128)
- stage.set_color(Clutter.Color.new(32,32,32,128))
-
- notext = Clutter.Text.new_full(font_entry, u"Enter Text Here", Clutter.Color.new(128,128,128,255))
- stage.add_child(notext)
- notext.show()
- intext = Clutter.Text.new_full(font_entry, u"", color_entry)
- intext.set_editable(True)
- intext.set_selectable(True)
- intext.set_activatable(True)
- intext.connect("key-press-event", key_press_handler, None)
- stage.add_child(intext)
- intext.show()
-
- selected_rect = Clutter.Rectangle.new()
- selected_rect.set_size(128.0*1.3,128.0*1.3*1.5)
- selected_rect.set_color(Clutter.Color.new(128,128,128,128))
- selected_rect.hide()
- stage.add_child(selected_rect)
-
- apps = apps_handler()
-
- apps.hide_all()
- stage.set_key_focus(intext)
-
- #stage.connect('button-press-event', lambda x, y: print("pressed"))
- #stage.connect('button-release-event', button_press_handler, None)
- stage.connect('key-press-event', key_press_handler, None)
- #stage.connect('motion-event', motion_handler, None)
- #stage.connect('destroy', lambda x: Clutter.main_quit())
- stage.connect('deactivate', desactivate_handler, None)
- stage.connect('allocation-changed', allocation_changed_handler, None)
- stage.connect('activate', activate_handler, None)
- intext.connect('text-changed', handle_text_changed, None)
-
- #stage.show()
-#.create_resource_object('window', winId)
-
- #_display = windows.get_display()
- #_win = _display.create_resource_object('window', windows.get_xid())
- #_win.change_property(_display.intern_atom('_NET_WM_STRUT'), _display.intern_atom('CARDINAL'),32, [left,right,top,bottom])
- #_win.change_property(_display.intern_atom('_NET_WM_DESKTOP'), _display.intern_atom('CARDINAL'),32, [0xffffffff])
- #print(windows)
- #sys.exit(-1)
-
- signal.signal(signal.SIGINT, sig_int_handler)
-
- Clutter.main()
+ panel = PanelView()
+ panel.run()
 
