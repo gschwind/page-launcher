@@ -55,24 +55,47 @@ static PyObject * py_set_strut(PyObject * self, PyObject * args) {
 		return NULL;
 	}
 
-	if(PyList_Size(py_list) != 4) {
+	if (PyList_Size(py_list) == 4) {
+		/* if _net_wm_strut */
+		long strut[4];
+		for (int i = 0; i < 4; ++i) {
+			PyObject * v = PyList_GetItem(py_list, i);
+			if (PyLong_Check(v)) {
+				strut[i] = PyLong_AsLong(v);
+			} else {
+				return NULL;
+			}
+		}
+
+		GdkAtom cardinal = gdk_atom_intern("CARDINAL", FALSE);
+		GdkAtom _net_wm_strut = gdk_atom_intern("_NET_WM_STRUT", FALSE);
+
+		gdk_property_change(GDK_WINDOW(pygobject_get(py_gdk_window)),
+				_net_wm_strut, cardinal, 32, GDK_PROP_MODE_REPLACE,
+				(guchar*) strut, 4);
+	} else if (PyList_Size(py_list) == 12) {
+		/* if _net_wm_strut_partial */
+
+		long strut_partial[12];
+		for (int i = 0; i < 12; ++i) {
+			PyObject * v = PyList_GetItem(py_list, i);
+			if (PyLong_Check(v)) {
+				strut_partial[i] = PyLong_AsLong(v);
+			} else {
+				return NULL;
+			}
+		}
+
+		GdkAtom cardinal = gdk_atom_intern("CARDINAL", FALSE);
+		GdkAtom _net_wm_strut_partial = gdk_atom_intern("_NET_WM_STRUT_PARTIAL", FALSE);
+
+		gdk_property_change(GDK_WINDOW(pygobject_get(py_gdk_window)),
+				_net_wm_strut_partial, cardinal, 32, GDK_PROP_MODE_REPLACE,
+				(guchar*) strut_partial, 12);
+	} else {
+		/* else error */
 		return NULL;
 	}
-
-	long strut[4];
-	for(int i = 0; i < 4; ++i) {
-		PyObject * v = PyList_GetItem(py_list, i);
-		if(PyLong_Check(v)) {
-			strut[i] = PyLong_AsLong(v);
-		} else {
-			return NULL;
-		}
-	}
-
-	GdkAtom cardinal = gdk_atom_intern("CARDINAL", FALSE);
-	GdkAtom _net_wm_strut = gdk_atom_intern("_NET_WM_STRUT", FALSE);
-
-	gdk_property_change(GDK_WINDOW(pygobject_get(py_gdk_window)), _net_wm_strut, cardinal, 32, GDK_PROP_MODE_REPLACE, (guchar*)strut, 4);
 
 	Py_RETURN_NONE;
 }
