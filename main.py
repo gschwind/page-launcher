@@ -34,7 +34,7 @@ from dbus.mainloop.glib import DBusGMainLoop
 import shlex
 import subprocess
 
-font = "Sans 20"
+font_dash = "Sans 12"
 color_apps = Clutter.Color.new(255,255,255,255)
 
 font_entry = "Sans Bold 30"
@@ -48,19 +48,20 @@ def sig_int_handler(n):
 class apps_entry:
  def __init__(self, parent, de):
   self.parent = parent
-  size = 128.0
+  self.ico_size = parent.ico_size
   self.name = de.getName().lower()
   self.generic_name = de.getGenericName().lower()
   self.comment = de.getComment().lower()
   self.exe = re.sub(u"%\w*", u"", de.getExec())
+  self.icon_name = de.getIcon()
   self.icon = self._find_icon(de.getIcon())
-  self.icon.set_size(size,size)
-  self.text = Clutter.Text.new_full(font, de.getName(), color_apps)
-  self.text.set_width(size)
+  self.icon.set_size(self.ico_size,self.ico_size)
+  self.text = Clutter.Text.new_full(font_dash, de.getName(), color_apps)
+  self.text.set_width(self.ico_size*1.5)
   self.text.set_ellipsize(Pango.EllipsizeMode.END)
   self.text.set_line_alignment(Pango.Alignment.CENTER)
   self.rect = Clutter.Rectangle.new()
-  self.rect.set_size(128.0*1.2,128.0*1.2*1.5)
+  self.rect.set_size(self.ico_size*1.2*1.5,self.ico_size*1.2*1.5)
   self.rect.set_color(Clutter.Color.new(255,255,255,128))
   self.rect.set_reactive(True)
   self.rect.set_opacity(0)
@@ -94,6 +95,9 @@ class apps_entry:
    self.rect.add_transition("fade_out", self.fade_out_transition)
   return True
 
+ def get_icon(self, size = 128):
+  return self._find_icon(self.icon_name, size)
+
  def _find_icon(self, icon_name, size = 128):
   icon_theme = Gtk.IconTheme.get_default()
   gtk_icon_info = icon_theme.lookup_icon(icon_name, 128, 0)
@@ -122,9 +126,9 @@ class apps_entry:
   pass
 
  def set_position(self, x, y):
-  self.rect.set_position(x-128.0*0.10,y-128.0*0.10)
+  self.rect.set_position(x-self.ico_size*0.10,y-self.ico_size*0.10)
   self.icon.set_position(x,y)
-  self.text.set_position(x,y+128.0*1.10)
+  self.text.set_position(x,y+self.ico_size*1.10)
   pass
 
  def fade_in_completed(self, transition, self1):
@@ -194,13 +198,13 @@ class apps_handler:
 
 class launcher_layout:
  def __init__(self, stage, napps):
-   self.size = 128.0
+   self.size = stage.ico_size
    self.y_offset = stage.intext.get_height()
    self.width = stage.get_width()
    self.height = stage.get_height() - self.y_offset
-   self.columns = int(floor(self.width/(self.size*1.3)))
+   self.columns = int(floor(self.width/(self.size*1.5*1.3)))
    self.rows = int(floor(self.height/(self.size*1.5*1.3)))
-   self.left_margin = (self.width-(self.columns*self.size*1.3))/2.0
+   self.left_margin = (self.width-(self.columns*self.size*1.5*1.3))/2.0
    self.top_margin = (self.height-(self.rows*self.size*1.5*1.3))/2.0
    npages = int(floor(napps/self.columns*self.rows)+1.0)
  pass
@@ -239,6 +243,7 @@ class DashView(Clutter.Stage):
 		self._create_dash_window()
 		ClutterGdk.set_stage_foreign(self, self.window)
 				
+		self.ico_size = 104
 		self.parent = parent
 		self.set_user_resizable(False)
 		self.set_title("page-dash")
@@ -264,11 +269,11 @@ class DashView(Clutter.Stage):
 		self.add_child(self.intext)
 		self.intext.show()
 
-		self.selected_rect = Clutter.Rectangle.new()
-		self.selected_rect.set_size(128.0*1.3,128.0*1.3*1.5)
-		self.selected_rect.set_color(Clutter.Color.new(128,128,128,128))
-		self.selected_rect.hide()
-		self.add_child(self.selected_rect)
+		#self.selected_rect = Clutter.Rectangle.new()
+		#self.selected_rect.set_size(self.ico_size*1.3,self.ico_size*1.3*1.5)
+		#self.selected_rect.set_color(Clutter.Color.new(128,128,128,128))
+		#self.selected_rect.hide()
+		#self.add_child(self.selected_rect)
 
 		self.apps.hide_all()
 		self.set_key_focus(self.intext)
@@ -371,7 +376,7 @@ class DashView(Clutter.Stage):
 			c = i - floor(i / layout.columns)*layout.columns
 			l = floor(i / layout.columns)
 			a = self.apps_list[i]
-			a.set_position(c*layout.size*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.y_offset+layout.top_margin)
+			a.set_position(c*layout.size*1.5*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.y_offset+layout.top_margin)
 			a.show()
 			self.current_actor.append(a)
 		pass
@@ -420,11 +425,19 @@ class DashView(Clutter.Stage):
 
 
 class PanelApp():
-	def __init__(self, xid, name, group_name):
+	def __init__(self, xid, name, group):
 		self.xid = xid
 		self.updated = 0
 		self.name = name
-		self.group_name = group_name
+		self.group_name = group.get_name()
+		self.group = group
+		# Add app to group
+		self.group.add(self)
+
+	def activate(self,event_time):
+		w=Wnck.Window.get(self.xid)
+		if w!=None:
+			w.activate(event_time)
 
 	def update(self, update):
 		self.updated = update
@@ -438,13 +451,27 @@ class PanelApp():
 		return self.name
 	def get_group_name(self):
 		return self.group_name
+	def get_group(self):
+		return self.group
 
 class PanelGroupApp():
-	def __init__(self,name, icon):
+	def __init__(self, stage, name, icon):
 		self.app_list = {}
 		self.name = name
 		self.locked = False
 		self.icon = icon
+		self.parent = stage
+		self.icon.set_size(self.parent.ico_size,self.parent.ico_size)
+		self.parent.add_child(self.icon)
+
+		self.icon_back =Clutter.Texture.new_from_file('./data/icon.png')
+
+		self.icon_back.set_size(self.parent.ico_size,self.parent.ico_size)
+		self.parent.add_child(self.icon_back)
+
+		self.icon_back.set_reactive(True)
+		self.icon_back.connect("button-press-event", PanelGroupApp.button_press_handler, self)
+
 
 	def add(self, iapp):
 		print("Adding "+str(iapp.get_xid()) +" to "+ self.name)
@@ -458,6 +485,19 @@ class PanelGroupApp():
 
 	def is_locked(self):
 		return self.locked
+
+	def get_name(self):
+		return self.name
+
+	def set_position(self,x, y):
+		self.icon.set_position(x,y)
+		self.icon_back.set_position(x,y)
+
+	def button_press_handler(widget, event, self):
+		if event.button == 1:			
+			for k,iapp in self.app_list.items():
+				iapp.activate(event.time)
+				break
 
 	def __str__(self):
 		#print(self.icon)
@@ -477,7 +517,10 @@ class PanelView(Clutter.Stage):
 
 		# Manualy create the window to setup properties before mapping the window		
 		self._create_panel_window()
-		
+
+		self.ico_size = 32
+		self.panel_width = self.ico_size+4
+
 		display = ClutterGdk.get_default_display()
 		root_height = display.get_default_screen().get_root_window().get_height()
 
@@ -485,30 +528,32 @@ class PanelView(Clutter.Stage):
 		ClutterGdk.set_stage_foreign(self, self.window)
 		self.window.set_type_hint(Gdk.WindowTypeHint.DOCK)
 		self.window.stick()
-		PageLauncherHook.set_strut(self.window, [32, 0, 0, 0])
-		self.set_size(32,root_height)
+		PageLauncherHook.set_strut(self.window, [self.panel_width, 0, 0, 0])
+		self.set_size(self.panel_width,root_height)
 		self.set_user_resizable(False)
 		self.set_title("page-panel")
 		self.set_use_alpha(True)
-		self.set_opacity(200)
+		self.set_opacity(0)
 		self.set_color(Clutter.Color.new(32,32,32,128))
 		self.set_scale(1.0, 1.0)
 
 		# create dash view
 		self.dash = DashView(self)
-		self.connect('button-press-event', self.button_press_handler)
-		self.show()
+		#self.connect('button-press-event', self.button_press_handler)
+		
 		self.window.move(0,0)
 
 		# Dictionnary of apps
 		self.dict_apps={}
-		self.dict_group_apps={}
+		self.list_group_apps=[]
 
 		self.update_cnt = 0
+		self.pos_offset = 0
 
 		self.wnck_screen = Wnck.Screen.get_default()
 		self.update_current_apps()
-
+		self.show()
+		
 		GObject.timeout_add(1000, self.refresh_timer, self)		
 
 	
@@ -519,7 +564,7 @@ class PanelView(Clutter.Stage):
 	def find_ico(self, name):
 		ret = self.dash.apps.filter_apps(name)
 		if ret:
-			return ret[0].icon
+			return ret[0].get_icon(self.ico_size)
 		else:
 			return None
 
@@ -552,12 +597,14 @@ class PanelView(Clutter.Stage):
 				# New app
 				else:
 					print('Create new app:' + str(xid) + "(" + group_name + ")")
-					# Append app to dict
-					iapp=PanelApp(xid, name, group_name)
-					self.dict_apps[xid] = iapp
-
 					# Create group if does not exist
-					if group_name not in self.dict_group_apps:
+					grp = None
+					for group in self.list_group_apps:
+						if group_name == group.get_name():
+							grp = group
+							break
+
+					if grp == None:
 						#print(app.get_icon().get_width())
 						# Get icon path
 						ico = self.find_ico(app.get_application().get_icon_name())
@@ -569,9 +616,13 @@ class PanelView(Clutter.Stage):
 							ico_data=  pix.get_pixels_array()
 
 						print('Create new group:' + str(group_name))
-						self.dict_group_apps[group_name] = PanelGroupApp(group_name,ico)
-					# Add app to group
-					self.dict_group_apps[group_name].add(iapp)
+						grp = PanelGroupApp(self,group_name,ico)
+						self.list_group_apps.append(grp)
+	
+					# Append app to dict
+					iapp=PanelApp(xid, name, grp)
+					self.dict_apps[xid] = iapp
+				
 				
 				iapp.update(self.update_cnt)
 
@@ -581,27 +632,36 @@ class PanelView(Clutter.Stage):
 		for xid, iapp in self.dict_apps.items():
 			if not iapp.is_updated(self.update_cnt):
 				# remove from group
-				self.dict_group_apps[iapp.get_group_name()].remove(iapp)
+				iapp.get_group().remove(iapp)
 				list_del.append(xid)
 				print('Deleting app:' + str(xid))
 
 		for xid in list_del:
 			self.dict_apps.pop(xid)
-				 
+
 
 		# Delete empty group		
 		list_del = []
-		for group_name, grp in self.dict_group_apps.items():	
+		for grp in self.list_group_apps:	
 			if grp.is_empty() and not grp.is_locked():
-				list_del.append(group_name)
-				print('Deleting group:' + str(group_name))
-		for group_name in list_del:
-			self.dict_group_apps.pop(group_name) 				
+				list_del.append(grp)
+				print('Deleting group:' + str(grp.get_name()))
+		for grp in list_del:
+			self.list_group_apps.remove(grp) 				
 
+	
+		
 		
 		print('=====')
-		for name, grp in self.dict_group_apps.items():
+		for grp in self.list_group_apps:
 			print(grp)
+
+		# Update icon position
+		pos_y = self.pos_offset
+		for grp in self.list_group_apps:
+			grp.set_position(0, pos_y)
+			pos_y += 2*self.ico_size
+
 
 	def button_press_handler(self, widget, event):
 		if event.button == 1:
