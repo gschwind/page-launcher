@@ -20,6 +20,7 @@ from gi.repository import ClutterGdk
 from gi.repository import Clutter
 from gi.repository import GtkClutter
 from gi.repository import Pango
+from gi.repository import Wnck
 
 import PageLauncherHook
 
@@ -417,6 +418,59 @@ class DashView(Clutter.Stage):
 		|Gdk.WindowAttributesType.NOREDIR
 		|Gdk.WindowAttributesType.TYPE_HINT)
 
+
+class PanelApp():
+	def __init__(self, xid, name, group_name):
+		self.xid = xid
+		self.updated = 0
+		self.name = name
+		self.group_name = group_name
+
+	def update(self, update):
+		self.updated = update
+
+	def is_updated(self, update):
+		return update == self.updated
+	
+	def get_xid(self):
+		return self.xid
+	def get_name(self):
+		return self.name
+	def get_group_name(self):
+		return self.group_name
+
+class PanelGroupApp():
+	def __init__(self,name, icon):
+		self.app_list = {}
+		self.name = name
+		self.locked = False
+		self.icon = icon
+
+	def add(self, iapp):
+		print("Adding "+str(iapp.get_xid()) +" to "+ self.name)
+		self.app_list[iapp.get_xid()] = iapp
+
+	def remove(self, iapp):
+		self.app_list.pop(iapp.get_xid())
+
+	def is_empty(self):
+		return len(self.app_list) == 0
+
+	def is_locked(self):
+		return self.locked
+
+	def __str__(self):
+		#print(self.icon)
+		tmp = "- "
+		tmp += self.name
+		tmp += ":\n"
+		for k,iapp in self.app_list.items():
+			tmp += "\t"			
+			tmp += iapp.get_name()
+			tmp += "\n"
+		return tmp
+
+
 class PanelView(Clutter.Stage):
 	def __init__(self):
 		super().__init__()
@@ -428,7 +482,6 @@ class PanelView(Clutter.Stage):
 		root_height = display.get_default_screen().get_root_window().get_height()
 
 		# tricks to create the window
-
 		ClutterGdk.set_stage_foreign(self, self.window)
 		self.window.set_type_hint(Gdk.WindowTypeHint.DOCK)
 		self.window.stick()
@@ -441,11 +494,114 @@ class PanelView(Clutter.Stage):
 		self.set_color(Clutter.Color.new(32,32,32,128))
 		self.set_scale(1.0, 1.0)
 
+		# create dash view
 		self.dash = DashView(self)
 		self.connect('button-press-event', self.button_press_handler)
 		self.show()
 		self.window.move(0,0)
- 				
+
+		# Dictionnary of apps
+		self.dict_apps={}
+		self.dict_group_apps={}
+
+		self.update_cnt = 0
+
+		self.wnck_screen = Wnck.Screen.get_default()
+		self.update_current_apps()
+
+		GObject.timeout_add(1000, self.refresh_timer, self)		
+
+	
+	def refresh_timer(self, *arg):
+		self.update_current_apps()
+		return True
+
+	def find_ico(self, name):
+		ret = self.dash.apps.filter_apps(name)
+		if ret:
+			return ret[0].icon
+		else:
+			return None
+
+	def update_current_apps(self):	
+		self.wnck_screen.force_update()
+		apps = self.wnck_screen.get_windows_stacked()
+		#print(apps)
+		#for app in apps:
+		#	print('----')
+		#	print(app.get_name())
+		#	#print(app.get_icon_name())
+		#	print(app.get_class_group_name())
+		#	#print(app.get_class_instance_name())
+		#	print(app.get_xid())
+		#	##print(app.get_session_id_utf8())
+		#	print(app.is_sticky())
+
+		self.update_cnt += 1
+		# Loop on Wnck apps
+		for app in apps:
+			if not app.is_sticky():
+				#print(app.get_xid())
+				xid = app.get_xid()
+				name = app.get_name()
+				group_name = app.get_application().get_name()
+
+				# Check if app is already in list
+				if xid in self.dict_apps:
+					iapp = self.dict_apps[xid]
+				# New app
+				else:
+					print('Create new app:' + str(xid) + "(" + group_name + ")")
+					# Append app to dict
+					iapp=PanelApp(xid, name, group_name)
+					self.dict_apps[xid] = iapp
+
+					# Create group if does not exist
+					if group_name not in self.dict_group_apps:
+						#print(app.get_icon().get_width())
+						# Get icon path
+						ico = self.find_ico(app.get_application().get_icon_name())
+						if ico==None:
+							ico = self.find_ico(app.get_application().get_name())
+						if ico==None:
+							pix=app.get_icon()
+							pix= pix.scale_simple(128,128,gtk.gdk.INTERP_HYPER)
+							ico_data=  pix.get_pixels_array()
+
+						print('Create new group:' + str(group_name))
+						self.dict_group_apps[group_name] = PanelGroupApp(group_name,ico)
+					# Add app to group
+					self.dict_group_apps[group_name].add(iapp)
+				
+				iapp.update(self.update_cnt)
+
+						
+		# Delete app not updated
+		list_del = []
+		for xid, iapp in self.dict_apps.items():
+			if not iapp.is_updated(self.update_cnt):
+				# remove from group
+				self.dict_group_apps[iapp.get_group_name()].remove(iapp)
+				list_del.append(xid)
+				print('Deleting app:' + str(xid))
+
+		for xid in list_del:
+			self.dict_apps.pop(xid)
+				 
+
+		# Delete empty group		
+		list_del = []
+		for group_name, grp in self.dict_group_apps.items():	
+			if grp.is_empty() and not grp.is_locked():
+				list_del.append(group_name)
+				print('Deleting group:' + str(group_name))
+		for group_name in list_del:
+			self.dict_group_apps.pop(group_name) 				
+
+		
+		print('=====')
+		for name, grp in self.dict_group_apps.items():
+			print(grp)
 
 	def button_press_handler(self, widget, event):
 		if event.button == 1:
