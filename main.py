@@ -6,6 +6,7 @@ import re
 import sys
 
 import signal
+import time
 
 from math import *
 
@@ -39,6 +40,10 @@ color_apps = Clutter.Color.new(255,255,255,255)
 
 font_entry = "Sans Bold 30"
 color_entry = Clutter.Color.new(255,255,255,255) # red,green,blue,alpha
+
+
+font_menu_entry = "Sans Bold 10"
+color_menu_entry = Clutter.Color.new(255,255,255,255) # red,green,blue,alpha
 
 
 def sig_int_handler(n):
@@ -424,6 +429,167 @@ class DashView(Clutter.Stage):
 		|Gdk.WindowAttributesType.TYPE_HINT)
 
 
+
+class SubWindow(Clutter.Stage):
+	def __init__(self, parent, x, y, width, height):
+		super().__init__()
+		self.is_grab = False
+		self._create_menu_window()
+		ClutterGdk.set_stage_foreign(self, self.window)
+
+		self.parent = parent
+		self.set_user_resizable(False)
+		self.set_title("sub-win")
+		self.set_use_alpha(True)
+		self.set_opacity(255)
+		self.set_color(Clutter.Color.new(0,0,0,0))
+		self.set_scale(1.0, 1.0)
+		self.set_accept_focus(True)
+
+	def _create_menu_window(self):
+		display = ClutterGdk.get_default_display()
+		root_height = display.get_default_screen().get_root_window().get_height()
+	
+		attr = Gdk.WindowAttr();
+		attr.title = "sub-win"
+		attr.width = 100
+		attr.height = 100
+		attr.x = 100
+		attr.y = 100
+		attr.event_mask = 0
+		attr.window_type = Gdk.WindowType.TOPLEVEL
+		attr.visual = display.get_default_screen().get_rgba_visual()
+		attr.override_redirect = True
+		attr.type_hint = Gdk.WindowTypeHint.MENU
+		self.window = Gdk.Window(None, attr,
+		 Gdk.WindowAttributesType.TITLE
+		|Gdk.WindowAttributesType.VISUAL
+		|Gdk.WindowAttributesType.X
+		|Gdk.WindowAttributesType.Y
+		|Gdk.WindowAttributesType.NOREDIR
+		|Gdk.WindowAttributesType.TYPE_HINT)
+
+class PanelMenu(SubWindow):
+	def __init__(self, parent):
+		super().__init__(parent, 0, 0, 100, 100)
+		
+		self.item_height = 32
+		self.item_margin_y = 2
+		self.item_margin_x = 20
+		self.global_width = 0
+		self.global_height = 0
+		#elf.container = Clutter.Group()
+
+		
+
+
+	def fade_in_completed(self, transition, item):
+		if item.get_transition("fade_in"):
+			item.remove_transition("fade_in")
+		item.set_opacity(255)
+		pass
+	def fade_out_completed(self, transition, item):
+		if item.get_transition("fade_out"):
+			item.remove_transition("fade_out")
+		item.set_opacity(100)
+		pass
+	def event_menu_enter_handler(widget, event, self,  item):
+		print('ENTER')
+		if item.get_transition("fade_out"):
+			item.remove_transition("fade_out")
+		if not item.get_transition("fade_in"):
+			item.add_transition("fade_in", item.fade_in_transition)
+		return True
+	def event_menu_leave_handler(widget, event, self,  item):
+		print('LEAVE')
+		if item.get_transition("fade_in"):
+			item.remove_transition("fade_in")
+		if not item.get_transition("fade_out"):
+			item.add_transition("fade_out", item.fade_out_transition)
+		return True
+
+	def event_menu_button_press(widget, event, self,  menu):
+		menu['obj'].activate(event.time)
+		self.hide_menu()
+
+	def event_menu_focus_out(widget, event, self,  menu):
+		print('FOCUS OUT')
+		self.hide_menu()
+
+	def show_menu(self, x, y, menulist, event_time):
+		self.set_x(0)
+		self.set_y(0)
+		#self.rect.remove_all_children()
+		self.remove_all()
+
+		self.rect = Clutter.Actor()
+		self.rect.set_x(0)
+		self.rect.set_y(0)
+		self.rect.set_background_color(Clutter.Color.new(32,32,32,200))	
+
+		self.add_child(self.rect)
+		self.global_width = 0
+
+		tmp_height = 0
+		for menu in menulist:
+			##print(menu['text'])
+			text = Clutter.Text.new_full(font_menu_entry, menu['text'], Clutter.Color.new(255,255,255,255))
+			#menu['txt'] = text
+			#text.set_background_color(Clutter.Color.new(0,0,0,0))	
+
+			text.set_x(self.item_margin_x)
+			text.set_y(tmp_height+self.item_height/4)
+
+			self.rect.add_child(text)
+		
+			self.global_width = max(self.global_width, text.get_width()+2*self.item_margin_x)
+			tmp_height += self.item_height+self.item_margin_y
+		self.global_height = tmp_height-+self.item_margin_y
+
+		tmp_height = 0
+		for menu in menulist:
+			back = Clutter.Rectangle()
+			back.set_color(		Clutter.Color.new(0,0,0,0))
+			back.set_border_color(		Clutter.Color.new(100,100,100,255))
+			back.set_opacity(100)
+			back.set_border_width(2)
+			back.set_reactive(True)
+			back.connect("button-press-event", PanelMenu.event_menu_button_press, self, menu)
+			back.connect("key-focus-out", PanelMenu.event_menu_focus_out, self, menu)
+			back.connect("enter-event", PanelMenu.event_menu_enter_handler, self, back)
+			back.connect("leave-event", PanelMenu.event_menu_leave_handler, self, back)
+			back.set_x(0)
+			back.set_y(tmp_height)
+			back.set_size(self.global_width,self.item_height)
+
+			back.fade_in_transition = Clutter.PropertyTransition.new("opacity")
+			back.fade_in_transition.set_duration(100)
+			back.fade_in_transition.set_to(255)
+			back.fade_out_transition = Clutter.PropertyTransition.new("opacity")
+			back.fade_out_transition.set_duration(500)
+			back.fade_out_transition.set_to(100)
+			back.fade_in_transition.connect("completed", PanelMenu.fade_in_completed, self, back)
+			back.fade_out_transition.connect("completed", PanelMenu.fade_out_completed, self, back)
+
+			tmp_height += self.item_height + self.item_margin_y
+			self.rect.add_child(back)
+
+		#self.window.set_size()
+		#dir(self.window)
+		print(self.global_width)
+		print(self.global_height)
+		self.window.resize(self.global_width, self.global_height)
+		self.window.move(x,y)
+		self.set_size(self.global_width, self.global_height)	
+		self.rect.set_size(self.global_width, self.global_height)	
+		
+		self.window.focus(event_time)
+		self.show_all()
+
+	def hide_menu(self):
+		self.hide()
+		self.remove_all()
+
 class PanelApp():
 	def __init__(self, xid, name, group):
 		self.xid = xid
@@ -434,7 +600,8 @@ class PanelApp():
 		# Add app to group
 		self.group.add(self)
 
-	def activate(self,event_time):
+	def activate(self,event_time = int(time.time())):
+		print('ACTIVATE: '+str(self.xid))
 		w=Wnck.Window.get(self.xid)
 		if w!=None:
 			w.activate(event_time)
@@ -454,24 +621,42 @@ class PanelApp():
 	def get_group(self):
 		return self.group
 
-class PanelGroupApp():
-	def __init__(self, stage, name, icon):
+class PanelGroupApp(Clutter.Group):
+	def __init__(self, panel, stage, name, icon, ico_size):
+		super().__init__()
 		self.app_list = {}
 		self.name = name
 		self.locked = False
-		self.icon = icon
 		self.parent = stage
-		self.icon.set_size(self.parent.ico_size,self.parent.ico_size)
-		self.parent.add_child(self.icon)
+		self.panel = panel
+		self.icon_size = ico_size
+		self.sub_icon_size = ico_size*2/3
+		self.sub_offset = (self.icon_size-self.sub_icon_size)/2
 
-		self.icon_back =Clutter.Texture.new_from_file('./data/icon.png')
+		self.icon = icon
+		self.icon.set_size(self.sub_icon_size,self.sub_icon_size)
 
-		self.icon_back.set_size(self.parent.ico_size,self.parent.ico_size)
-		self.parent.add_child(self.icon_back)
+		#self.icon_back =Clutter.Texture.new_from_file('./data/icon.png')
+		self.icon_back = Clutter.Rectangle()
+		self.icon_back.set_color(		Clutter.Color.new(0,0,0,0))
+		self.icon_back.set_border_color(		Clutter.Color.new(50,50,50,255))
+		self.icon_back.set_border_width(2)
+		self.icon_back.set_size(ico_size,ico_size)
+		
+		
 
 		self.icon_back.set_reactive(True)
 		self.icon_back.connect("button-press-event", PanelGroupApp.button_press_handler, self)
 
+		#Enable animation
+		#self.save_easing_state();
+		#self.set_easing_mode(Clutter.AnimationMode.EASE_IN_OUT_CUBIC);
+		#self.set_easing_duration(100);
+
+		self.add_child(self.icon_back)
+		self.add_child(self.icon)		
+
+		self.parent.add_child(self)
 
 	def add(self, iapp):
 		print("Adding "+str(iapp.get_xid()) +" to "+ self.name)
@@ -490,14 +675,23 @@ class PanelGroupApp():
 		return self.name
 
 	def set_position(self,x, y):
-		self.icon.set_position(x,y)
+		self.icon.set_position(x+self.sub_offset,y+self.sub_offset)
 		self.icon_back.set_position(x,y)
 
 	def button_press_handler(widget, event, self):
-		if event.button == 1:			
+		if event.button == 1:
+			menu_list = []
 			for k,iapp in self.app_list.items():
-				iapp.activate(event.time)
-				break
+				menu = {}
+				menu['text'] = iapp.get_name()
+				menu['obj'] = iapp
+				menu_list.append(menu)
+
+			self.panel.panel_menu.show_menu(self.panel.panel_width, self.icon_back.get_y(), menu_list, event.time)	
+			self.panel.panel_menu.window.focus(event.time)
+			#for k,iapp in self.app_list.items():
+			#	iapp.activate(event.time)
+			#	break
 
 	def __str__(self):
 		#print(self.icon)
@@ -518,8 +712,9 @@ class PanelView(Clutter.Stage):
 		# Manualy create the window to setup properties before mapping the window		
 		self._create_panel_window()
 
-		self.ico_size = 32
-		self.panel_width = self.ico_size+4
+		self.ico_size = 64
+		self.margin = 2
+		self.panel_width = self.ico_size+2*self.margin
 
 		display = ClutterGdk.get_default_display()
 		root_height = display.get_default_screen().get_root_window().get_height()
@@ -534,11 +729,12 @@ class PanelView(Clutter.Stage):
 		self.set_title("page-panel")
 		self.set_use_alpha(True)
 		self.set_opacity(0)
-		self.set_color(Clutter.Color.new(32,32,32,128))
+		self.set_color(Clutter.Color.new(0,0,0,0))
 		self.set_scale(1.0, 1.0)
 
 		# create dash view
 		self.dash = DashView(self)
+		self.panel_menu = PanelMenu(self)
 		#self.connect('button-press-event', self.button_press_handler)
 		
 		self.window.move(0,0)
@@ -550,10 +746,19 @@ class PanelView(Clutter.Stage):
 		self.update_cnt = 0
 		self.pos_offset = 0
 
+
+		self.rect = Clutter.Actor()
+		self.rect.set_x(0)
+		self.rect.set_y(0)
+		self.rect.set_size(self.panel_width,root_height)	
+		self.rect.set_background_color(Clutter.Color.new(32,32,32,255))	
+		#self.rect.set_background_color(Clutter.Color.new(255,255,0,0))
+		self.add_child(self.rect)
+
 		self.wnck_screen = Wnck.Screen.get_default()
 		self.update_current_apps()
 		self.show()
-		
+
 		GObject.timeout_add(1000, self.refresh_timer, self)		
 
 	
@@ -616,7 +821,7 @@ class PanelView(Clutter.Stage):
 							ico_data=  pix.get_pixels_array()
 
 						print('Create new group:' + str(group_name))
-						grp = PanelGroupApp(self,group_name,ico)
+						grp = PanelGroupApp(self, self.rect,group_name,ico,self.ico_size)
 						self.list_group_apps.append(grp)
 	
 					# Append app to dict
@@ -659,8 +864,8 @@ class PanelView(Clutter.Stage):
 		# Update icon position
 		pos_y = self.pos_offset
 		for grp in self.list_group_apps:
-			grp.set_position(0, pos_y)
-			pos_y += 2*self.ico_size
+			grp.set_position(self.margin, pos_y+self.margin)
+			pos_y += self.ico_size+self.margin
 
 
 	def button_press_handler(self, widget, event):
