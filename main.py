@@ -17,6 +17,7 @@ from gi.repository import GObject
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GdkX11
+from gi.repository import GdkPixbuf
 from gi.repository import ClutterGdk
 from gi.repository import Clutter
 from gi.repository import GtkClutter
@@ -469,19 +470,26 @@ class SubWindow(Clutter.Stage):
 		|Gdk.WindowAttributesType.NOREDIR
 		|Gdk.WindowAttributesType.TYPE_HINT)
 
-class PanelMenu(SubWindow):
-	def __init__(self, parent):
-		super().__init__(parent, 0, 0, 100, 100)
-		
-		self.item_height = 32
-		self.item_margin_y = 2
-		self.item_margin_x = 20
-		self.global_width = 0
-		self.global_height = 0
-		#elf.container = Clutter.Group()
 
+class ItemMenu(Clutter.Rectangle):
+	def __init__(self):
+		super().__init__()
+		self.set_color(		Clutter.Color.new(0,0,0,0))
+		self.set_border_color(		Clutter.Color.new(100,100,100,255))
+		self.set_opacity(100)
+		self.set_border_width(2)
+		self.set_reactive(True)
+		self.connect("enter-event", ItemMenu.event_menu_enter_handler, self, self)
+		self.connect("leave-event", ItemMenu.event_menu_leave_handler, self, self)
 		
-
+		self.fade_in_transition = Clutter.PropertyTransition.new("opacity")
+		self.fade_in_transition.set_duration(100)
+		self.fade_in_transition.set_to(255)
+		self.fade_out_transition = Clutter.PropertyTransition.new("opacity")
+		self.fade_out_transition.set_duration(500)
+		self.fade_out_transition.set_to(100)
+		self.fade_in_transition.connect("completed", ItemMenu.fade_in_completed, self, self)
+		self.fade_out_transition.connect("completed", ItemMenu.fade_out_completed, self, self)
 
 	def fade_in_completed(self, transition, item):
 		if item.get_transition("fade_in"):
@@ -508,11 +516,26 @@ class PanelMenu(SubWindow):
 			item.add_transition("fade_out", item.fade_out_transition)
 		return True
 
+class PanelMenu(SubWindow):
+	def __init__(self, parent):
+		super().__init__(parent, 0, 0, 100, 100)
+		
+		self.item_height = 32
+		self.item_margin_y = 2
+		self.item_margin_x = 20
+		self.global_width = 0
+		self.global_height = 0
+		self.connect("deactivate", PanelMenu.event_menu_focus_out, self)
+	
+		#elf.container = Clutter.Group()
+
+			
+
 	def event_menu_button_press(widget, event, self,  menu):
 		menu['obj'].activate(event.time)
 		self.hide_menu()
 
-	def event_menu_focus_out(widget, event, self,  menu):
+	def event_menu_focus_out(widget, event, self):
 		print('FOCUS OUT')
 		self.hide_menu()
 
@@ -548,28 +571,12 @@ class PanelMenu(SubWindow):
 
 		tmp_height = 0
 		for menu in menulist:
-			back = Clutter.Rectangle()
-			back.set_color(		Clutter.Color.new(0,0,0,0))
-			back.set_border_color(		Clutter.Color.new(100,100,100,255))
-			back.set_opacity(100)
-			back.set_border_width(2)
-			back.set_reactive(True)
-			back.connect("button-press-event", PanelMenu.event_menu_button_press, self, menu)
-			back.connect("key-focus-out", PanelMenu.event_menu_focus_out, self, menu)
-			back.connect("enter-event", PanelMenu.event_menu_enter_handler, self, back)
-			back.connect("leave-event", PanelMenu.event_menu_leave_handler, self, back)
+			back = ItemMenu()
+			self.connect("button-press-event", PanelMenu.event_menu_button_press, self, menu)
+			
 			back.set_x(0)
 			back.set_y(tmp_height)
 			back.set_size(self.global_width,self.item_height)
-
-			back.fade_in_transition = Clutter.PropertyTransition.new("opacity")
-			back.fade_in_transition.set_duration(100)
-			back.fade_in_transition.set_to(255)
-			back.fade_out_transition = Clutter.PropertyTransition.new("opacity")
-			back.fade_out_transition.set_duration(500)
-			back.fade_out_transition.set_to(100)
-			back.fade_in_transition.connect("completed", PanelMenu.fade_in_completed, self, back)
-			back.fade_out_transition.connect("completed", PanelMenu.fade_out_completed, self, back)
 
 			tmp_height += self.item_height + self.item_margin_y
 			self.rect.add_child(back)
@@ -637,10 +644,10 @@ class PanelGroupApp(Clutter.Group):
 		self.icon.set_size(self.sub_icon_size,self.sub_icon_size)
 
 		#self.icon_back =Clutter.Texture.new_from_file('./data/icon.png')
-		self.icon_back = Clutter.Rectangle()
-		self.icon_back.set_color(		Clutter.Color.new(0,0,0,0))
-		self.icon_back.set_border_color(		Clutter.Color.new(50,50,50,255))
-		self.icon_back.set_border_width(2)
+		self.icon_back = ItemMenu()
+		#self.icon_back.set_color(		Clutter.Color.new(0,0,0,0))
+		#self.icon_back.set_border_color(		Clutter.Color.new(50,50,50,255))
+		#self.icon_back.set_border_width(2)
 		self.icon_back.set_size(ico_size,ico_size)
 		
 		
@@ -817,8 +824,18 @@ class PanelView(Clutter.Stage):
 							ico = self.find_ico(app.get_application().get_name())
 						if ico==None:
 							pix=app.get_icon()
-							pix= pix.scale_simple(128,128,gtk.gdk.INTERP_HYPER)
-							ico_data=  pix.get_pixels_array()
+							pix= pix.scale_simple(128,128,GdkPixbuf.InterpType.BILINEAR)
+							ico = Clutter.Texture.new()
+							data = pix.get_pixels()
+							width = pix.get_width ()
+							height = pix.get_height()
+							if pix.get_has_alpha():
+								bpp = 4
+							else:
+								bpp = 3
+							rowstride = pix.get_rowstride()
+							ico.set_from_rgb_data(data, pix.get_has_alpha(), width, height, rowstride, bpp,0 );
+							#ico_data=  pix.get_pixels_array()
 
 						print('Create new group:' + str(group_name))
 						grp = PanelGroupApp(self, self.rect,group_name,ico,self.ico_size)
