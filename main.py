@@ -8,6 +8,9 @@ import sys
 import signal
 import time
 
+import gc
+import pprint
+
 from math import *
 
 from io import StringIO
@@ -45,6 +48,9 @@ color_entry = Clutter.Color.new(255,255,255,255) # red,green,blue,alpha
 
 font_menu_entry = "Sans Bold 10"
 color_menu_entry = Clutter.Color.new(255,255,255,255) # red,green,blue,alpha
+
+font_icon_entry = "Sans Bold 8"
+color_icon_entry = Clutter.Color.new(128,128,128,255) # red,green,blue,alpha
 
 
 def sig_int_handler(n):
@@ -449,7 +455,7 @@ class SubWindow(Clutter.Stage):
 
 	def _create_menu_window(self):
 		display = ClutterGdk.get_default_display()
-		root_height = display.get_default_screen().get_root_window().get_height()
+		self.root_height = display.get_default_screen().get_root_window().get_height()
 	
 		attr = Gdk.WindowAttr();
 		attr.title = "sub-win"
@@ -525,13 +531,13 @@ class PanelMenu(SubWindow):
 		self.item_margin_x = 20
 		self.global_width = 0
 		self.global_height = 0
-		self.connect("deactivate", PanelMenu.event_menu_focus_out, self)
+		#self.connect("deactivate", PanelMenu.event_menu_focus_out, self)
 	
 		#elf.container = Clutter.Group()
-
 			
 
 	def event_menu_button_press(widget, event, self,  menu):
+		print('PANEL KEYPRESS')
 		menu['obj'].activate(event.time)
 		self.hide_menu()
 
@@ -540,10 +546,12 @@ class PanelMenu(SubWindow):
 		self.hide_menu()
 
 	def show_menu(self, x, y, menulist, event_time):
+		print('SHOW MENU')
 		self.set_x(0)
 		self.set_y(0)
 		#self.rect.remove_all_children()
-		self.remove_all()
+		self.destroy_all_children()
+		#self.remove_all()
 
 		self.rect = Clutter.Actor()
 		self.rect.set_x(0)
@@ -572,8 +580,8 @@ class PanelMenu(SubWindow):
 		tmp_height = 0
 		for menu in menulist:
 			back = ItemMenu()
-			self.connect("button-press-event", PanelMenu.event_menu_button_press, self, menu)
-			
+			back.connect("button-press-event", PanelMenu.event_menu_button_press, self, menu)
+
 			back.set_x(0)
 			back.set_y(tmp_height)
 			back.set_size(self.global_width,self.item_height)
@@ -585,13 +593,20 @@ class PanelMenu(SubWindow):
 		#dir(self.window)
 		print(self.global_width)
 		print(self.global_height)
+
+		if self.root_height < self.global_height+y:
+			y=self.root_height-self.global_height
+		
 		self.window.resize(self.global_width, self.global_height)
 		self.window.move(x,y)
+
+
 		self.set_size(self.global_width, self.global_height)	
 		self.rect.set_size(self.global_width, self.global_height)	
 		
 		self.window.focus(event_time)
 		self.show_all()
+		pass
 
 	def hide_menu(self):
 		self.hide()
@@ -607,11 +622,15 @@ class PanelApp():
 		# Add app to group
 		self.group.add(self)
 
-	def activate(self,event_time = int(time.time())):
+	def unregister(self):
+		self.group = None
+
+	def activate(self,event_time):
 		print('ACTIVATE: '+str(self.xid))
 		w=Wnck.Window.get(self.xid)
 		if w!=None:
 			w.activate(event_time)
+		pass
 
 	def update(self, update):
 		self.updated = update
@@ -628,32 +647,20 @@ class PanelApp():
 	def get_group(self):
 		return self.group
 
-class PanelGroupApp(Clutter.Group):
-	def __init__(self, panel, stage, name, icon, ico_size):
+
+class PanelIcon(Clutter.Group):
+	def __init__(self, panel, icon, ico_size, margin = 2/3):
 		super().__init__()
-		self.app_list = {}
-		self.name = name
-		self.locked = False
-		self.parent = stage
 		self.panel = panel
 		self.icon_size = ico_size
-		self.sub_icon_size = ico_size*2/3
+		self.sub_icon_size = ico_size*margin
 		self.sub_offset = (self.icon_size-self.sub_icon_size)/2
-
 		self.icon = icon
 		self.icon.set_size(self.sub_icon_size,self.sub_icon_size)
 
-		#self.icon_back =Clutter.Texture.new_from_file('./data/icon.png')
 		self.icon_back = ItemMenu()
-		#self.icon_back.set_color(		Clutter.Color.new(0,0,0,0))
-		#self.icon_back.set_border_color(		Clutter.Color.new(50,50,50,255))
-		#self.icon_back.set_border_width(2)
 		self.icon_back.set_size(ico_size,ico_size)
-		
-		
-
 		self.icon_back.set_reactive(True)
-		self.icon_back.connect("button-press-event", PanelGroupApp.button_press_handler, self)
 
 		#Enable animation
 		#self.save_easing_state();
@@ -661,9 +668,61 @@ class PanelGroupApp(Clutter.Group):
 		#self.set_easing_duration(100);
 
 		self.add_child(self.icon_back)
-		self.add_child(self.icon)		
+		self.add_child(self.icon)
 
-		self.parent.add_child(self)
+	def set_position(self,x, y):
+		self.icon.set_position(x+self.sub_offset,y+self.sub_offset)
+		self.icon_back.set_position(x,y)
+
+
+class PanelShutdown(PanelIcon):
+	def __init__(self, panel, ico_size):
+		super().__init__(panel,  Clutter.Texture.new_from_file("./data/logout.png"), ico_size, 1)
+		
+		self.icon_back.connect("button-press-event", PanelShutdown.button_press_handler, self)
+		
+
+	def button_press_handler(widget, event, self):
+		menu_list = [
+			{'text':"Shutdown",'obj':Shutdown()},
+			{'text':"Log Out",'obj':Logout()},
+			{'text':"Sleep",'obj':Sleep()},
+			{'text':"Reboot",'obj':Reboot()},
+			]
+
+		self.panel.panel_menu.show_menu(self.panel.panel_width, self.icon_back.get_y(), menu_list, event.time)	
+		self.panel.panel_menu.window.focus(event.time)
+
+class PanelGroupApp(PanelIcon):
+	def __init__(self, panel, name, icon, ico_size):
+		super().__init__(panel, icon, ico_size)
+		self.app_list = {}
+		self.name = name
+		self.locked = False
+
+		self.icon_back.connect("button-press-event", PanelGroupApp.button_press_handler, self)
+
+		#self.icon_text = Clutter.Text.new_full(font_menu_entry, "", Clutter.Color.new(255,255,255,255))
+		#self.add_child(self.icon_text)
+
+	def set_position(self,x, y):
+		super().set_position(x,y)
+		#self.icon_text.set_text(str(len(self.app_list)))
+		#self.icon_text.set_position(x+5,y+5)
+		
+	
+
+	def unregister(self):
+		print("UNREG")
+		self.hide_all()
+		self.destroy_all_children()
+		self.get_parent().remove_child(self)
+		print(self.app_list)
+			
+
+
+	def __del__(self):
+		print("DESTROY")
 
 	def add(self, iapp):
 		print("Adding "+str(iapp.get_xid()) +" to "+ self.name)
@@ -681,24 +740,24 @@ class PanelGroupApp(Clutter.Group):
 	def get_name(self):
 		return self.name
 
-	def set_position(self,x, y):
-		self.icon.set_position(x+self.sub_offset,y+self.sub_offset)
-		self.icon_back.set_position(x,y)
 
 	def button_press_handler(widget, event, self):
 		if event.button == 1:
-			menu_list = []
-			for k,iapp in self.app_list.items():
-				menu = {}
-				menu['text'] = iapp.get_name()
-				menu['obj'] = iapp
-				menu_list.append(menu)
+			if len(self.app_list) > 1:
+				menu_list = []
+				for k,iapp in self.app_list.items():
+					menu = {}
+					menu['text'] = iapp.get_name()
+					menu['obj'] = iapp
+					menu_list.append(menu)
 
-			self.panel.panel_menu.show_menu(self.panel.panel_width, self.icon_back.get_y(), menu_list, event.time)	
-			self.panel.panel_menu.window.focus(event.time)
-			#for k,iapp in self.app_list.items():
-			#	iapp.activate(event.time)
-			#	break
+				self.panel.panel_menu.show_menu(self.panel.panel_width, self.icon_back.get_y(), menu_list, event.time)	
+				self.panel.panel_menu.window.focus(event.time)
+			else:
+				self.panel.panel_menu.hide_menu()
+				for k,iapp in self.app_list.items():
+					iapp.activate(event.time)
+					break
 
 	def __str__(self):
 		#print(self.icon)
@@ -739,15 +798,19 @@ class PanelView(Clutter.Stage):
 		self.set_color(Clutter.Color.new(0,0,0,0))
 		self.set_scale(1.0, 1.0)
 
+		self.connect('button-press-event', PanelView.button_press_handler, self)
 		# create dash view
 		self.dash = DashView(self)
 		self.panel_menu = PanelMenu(self)
-		#self.connect('button-press-event', self.button_press_handler)
+		#
 		
 
 		# Dictionnary of apps
 		self.dict_apps={}
 		self.list_group_apps=[]
+		self.list_sys_apps=[]
+
+		self.list_sys_apps.append(PanelShutdown(self, self.ico_size))
 
 		self.update_cnt = 0
 		self.pos_offset = 0
@@ -760,6 +823,9 @@ class PanelView(Clutter.Stage):
 		self.rect.set_background_color(Clutter.Color.new(32,32,32,255))	
 		#self.rect.set_background_color(Clutter.Color.new(255,255,0,0))
 		self.add_child(self.rect)
+		
+		for app in self.list_sys_apps:
+			self.rect.add_child(app)
 
 		self.wnck_screen = Wnck.Screen.get_default()
 		self.update_current_apps()
@@ -837,11 +903,18 @@ class PanelView(Clutter.Stage):
 							#ico_data=  pix.get_pixels_array()
 
 						print('Create new group:' + str(group_name))
-						grp = PanelGroupApp(self, self.rect,group_name,ico,self.ico_size)
+						grp = PanelGroupApp(self,group_name,ico,self.ico_size)
+						
+						print(sys.getrefcount(grp))
+						self.rect.add_child(grp)
+						print(sys.getrefcount(grp))
 						self.list_group_apps.append(grp)
+						print(sys.getrefcount(grp))
 	
 					# Append app to dict
+					print(sys.getrefcount(grp))					
 					iapp=PanelApp(xid, name, grp)
+					print(sys.getrefcount(grp))
 					self.dict_apps[xid] = iapp
 				
 				
@@ -854,11 +927,13 @@ class PanelView(Clutter.Stage):
 			if not iapp.is_updated(self.update_cnt):
 				# remove from group
 				iapp.get_group().remove(iapp)
+				iapp.unregister()
 				list_del.append(xid)
 				print('Deleting app:' + str(xid))
 
-		for xid in list_del:
+		for xid in list_del:			
 			self.dict_apps.pop(xid)
+			
 
 
 		# Delete empty group		
@@ -868,8 +943,16 @@ class PanelView(Clutter.Stage):
 				list_del.append(grp)
 				print('Deleting group:' + str(grp.get_name()))
 		for grp in list_del:
-			self.list_group_apps.remove(grp) 				
-
+			
+			print('Deleting group II :' + str(grp.get_name()))
+			print(sys.getrefcount(grp))
+			for r in gc.get_referrers(grp):
+				pprint.pprint(r)	
+			self.list_group_apps.remove(grp)	
+			grp.unregister()
+			print(sys.getrefcount(grp))
+			for r in gc.get_referrers(grp):
+				pprint.pprint(r)
 	
 		
 		
@@ -883,11 +966,20 @@ class PanelView(Clutter.Stage):
 			grp.set_position(self.margin, pos_y+self.margin)
 			pos_y += self.ico_size+self.margin
 
+		# Update icon position
+		pos_y = self.get_height()
+		for grp in self.list_sys_apps:
+			pos_y -= grp.icon_size+self.margin
+			print(pos_y)			
+			grp.set_position(self.margin, pos_y+self.margin)
+			
 
-	def button_press_handler(self, widget, event):
+	def button_press_handler(widget, event, self):
 		if event.button == 1:
-			self.dash.show(event.time)
-			self.dash.window.focus(event.time)
+			print ('pouet')
+			#self.panel_menu.hide_menu()
+			#self.dash.show(event.time)
+			#self.dash.window.focus(event.time)
 		elif event.button == 3:
 			Clutter.main_quit()
 
@@ -914,6 +1006,98 @@ class PanelView(Clutter.Stage):
 		|Gdk.WindowAttributesType.VISUAL
 		|Gdk.WindowAttributesType.X
 		|Gdk.WindowAttributesType.Y)
+
+
+#####
+####
+def dbus_login1(bus):
+	bus_object = bus.get_object("org.freedesktop.login1", "/org/freedesktop/login1")
+	iface = dbus.Interface(bus_object, 'org.freedesktop.login1.Manager')
+	return iface
+def dbus_upower(bus):
+	bus_object = bus.get_object("org.freedesktop.UPower", "/org/freedesktop/UPower")
+	iface = dbus.Interface(bus_object, 'org.freedesktop.UPower')
+	return iface
+def dbus_consolekit(bus):
+	bus_object = bus.get_object("org.freedesktop.ConsoleKit", "/org/freedesktop/ConsoleKit/Manager")
+	iface = dbus.Interface(bus_object, 'org.freedesktop.ConsoleKit.Manager')
+	return iface
+def dbus_lightdm(bus):
+	seat_path=os.environ.get('XDG_SEAT_PATH')
+	bus_object = bus.get_object("org.freedesktop.DisplayManager", seat_path)
+	iface = dbus.Interface(bus_object, 'org.freedesktop.DisplayManager.Seat')
+	return iface
+
+class Sleep():
+	def activate(self, event_time):
+		bus = dbus.SystemBus()
+		try:
+			i = dbus_login1(bus)
+			if i.CanHybridSleep()=="yes":
+				print("sleep")
+				i.HybridSleep(0)
+			elif i.CanHibernate()=="yes":
+				print("hibernate")
+				i.Hibernate(0)
+			elif i.CanSuspend()=="yes":
+				print("suspend")
+				i.Suspend(0)
+			else:
+				raise Exception("'org.freedesktop.login1' somehow doesn't work.")
+		except:
+			i=dbus_upower(bus)
+			if i.HibernateAllowed():
+				print ("hibernate")
+				i.Hibernate(0)
+			elif i.SuspendAllowed():
+				print ("suspend")
+				i.Suspend(0)
+			else:
+				print("Error: could not sleep, sorry.")
+
+class Shutdown():
+	def activate(self, event_time):
+		bus = dbus.SystemBus()
+		try:
+			i = dbus_login1(bus)
+			if i.CanPowerOff()=="yes":
+				print("power off")
+				i.PowerOff(0)
+			else:
+				raise Exception("'org.freedesktop.login1' somehow doesn't work.")
+		except:
+			i  = dbus_consolekit(bus)
+			if i.CanStop():
+				print("shutdown")
+				i.Stop(0)
+			else:
+				raise Exception("'org.freedesktop.Consolekit' somehow doesn't work.")
+class Reboot():
+	def activate(self, event_time):
+		bus = dbus.SystemBus()
+		try:
+			i = dbus_login1(bus)
+			if i.CanReboot()=="no":
+				print("reboot")
+				i.Reboot(0)
+			else:
+				raise Exception("'org.freedesktop.login1' somehow doesn't work.")
+		except:
+			i  = dbus_consolekit(bus)
+			if i.CanRestart():
+				print("reboot")
+				i.Restart(0)
+			else:
+				raise Exception("'org.freedesktop.Consolekit' somehow doesn't work.")
+class Logout():
+	def activate(self, event_time):
+		bus = dbus.SystemBus()
+		try:
+			i= dbus_lightdm(bus)
+			print("switch")
+			i.SwitchToGreeter(0)
+		except:
+			raise Exception("logout somehow doesn't work.")
 
 if __name__ == '__main__':
  Gdk.init(sys.argv)
