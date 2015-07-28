@@ -744,7 +744,6 @@ class PanelView(Clutter.Stage):
 		self.panel_menu = PanelMenu(self)
 		#self.connect('button-press-event', self.button_press_handler)
 		
-		self.window.move(0,0)
 
 		# Dictionnary of apps
 		self.dict_apps={}
@@ -894,6 +893,7 @@ class PanelView(Clutter.Stage):
 
 	def run(self):
 		self.show()
+		self.window.move(0,0)
 		Clutter.main()
 		
 	def _create_panel_window(self):
