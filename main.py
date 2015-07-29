@@ -20,6 +20,7 @@ from gi.repository import ClutterGdk
 from gi.repository import Clutter
 from gi.repository import GtkClutter
 from gi.repository import Pango
+from gi.repository import Wnck
 
 import PageLauncherHook
 
@@ -45,8 +46,7 @@ def sig_int_handler(n):
 
 
 class apps_entry:
- def __init__(self, parent, de):
-  self.parent = parent
+ def __init__(self, stage, de):
   size = 128.0
   self.name = de.getName().lower()
   self.generic_name = de.getGenericName().lower()
@@ -74,9 +74,9 @@ class apps_entry:
   self.fade_out_transition.set_duration(2000)
   self.fade_out_transition.set_to(0)
   self.fade_out_transition.connect("completed", self.fade_out_completed, self)
-  self.parent.add_child(self.rect)
-  self.parent.add_child(self.icon)
-  self.parent.add_child(self.text)
+  stage.add_child(self.rect)
+  stage.add_child(self.icon)
+  stage.add_child(self.text)
   self.hide()
   pass
 
@@ -140,7 +140,7 @@ class apps_entry:
  def button_press_handler(widget, event, self):
   if event.button == Clutter.BUTTON_PRIMARY:
    self.call()
-   self.parent.hide()
+   self.rect.get_parent().hide()
   pass
 
  def call(self):
@@ -231,14 +231,16 @@ class DBusWidget(dbus.service.Object):
   pass
  pass
 
+def test_filter(event):
+	print(event)
+
 class DashView(Clutter.Stage):
-	def __init__(self, parent):
+	def __init__(self):
 		super().__init__()
 		self.is_grab = False
 		self._create_dash_window()
 		ClutterGdk.set_stage_foreign(self, self.window)
 				
-		self.parent = parent
 		self.set_user_resizable(False)
 		self.set_title("page-dash")
 		self.set_use_alpha(True)
@@ -279,16 +281,23 @@ class DashView(Clutter.Stage):
 		self.connect('key-press-event', self.key_press_handler)
 		self.connect('allocation-changed', self.allocation_changed_handler)
 		self.intext.connect('text-changed', self.handle_text_changed)
-
-
-	def show(self, time):
+		self.connect("leave-event", self.leave_notify)
+		self.connect("enter-event", self.enter_notify)
+		self.connect("key-focus-in", self.key_focus_in)
+		self.connect("key-focus-out", self.key_focus_out)
+		
+		
+	def show(self, stage, time):
 		print("Dash show")
-
-		parent_window = ClutterGdk.get_stage_window(self.parent)
+		self.connect("deactivate", self.xxx_deactivate)
+		self.connect("activate", self.xxx_activate)
+		parent_window = ClutterGdk.get_stage_window(stage)
 		self.window.set_transient_for(parent_window)
 		root_height = self.window.get_screen().get_root_window().get_height()
 		self.set_size(500, root_height)
 		self.window.move(32, 0)
+		
+		#PageLauncherHook.gdk_add_filter(self.window, self.test_filter)
 		
 		if self.intext.get_text() == u"":
 			self.notext.show()
@@ -308,15 +317,23 @@ class DashView(Clutter.Stage):
 		dm = dpy.get_device_manager()
 		dev = dm.list_devices(Gdk.DeviceType.MASTER)
 		for d in dev:
-		 d.grab(self.window, Gdk.GrabOwnership.WINDOW, False,
-		 Gdk.EventMask.BUTTON_PRESS_MASK
-		 |Gdk.EventMask.BUTTON_RELEASE_MASK
-		 |Gdk.EventMask.BUTTON_MOTION_MASK
-		 |Gdk.EventMask.POINTER_MOTION_MASK
-		 |Gdk.EventMask.KEY_PRESS_MASK
-		 |Gdk.EventMask.KEY_RELEASE_MASK,
-		 None,
-		 time)
+		 if d.get_source() == Gdk.InputSource.KEYBOARD:
+		  d.grab(self.window, Gdk.GrabOwnership.WINDOW, True,
+		  Gdk.EventMask.KEY_PRESS_MASK
+		  |Gdk.EventMask.KEY_RELEASE_MASK,
+		  None,
+		  time)
+		 elif d.get_source() == Gdk.InputSource.MOUSE and False:
+		  d.grab(self.window, Gdk.GrabOwnership.WINDOW, True,
+		  Gdk.EventMask.BUTTON_PRESS_MASK
+		  |Gdk.EventMask.BUTTON_RELEASE_MASK
+		  |Gdk.EventMask.BUTTON_MOTION_MASK
+		  |Gdk.EventMask.POINTER_MOTION_MASK
+		  |Gdk.EventMask.LEAVE_NOTIFY_MASK
+		  |Gdk.EventMask.ENTER_NOTIFY_MASK
+		  |Gdk.EventMask.SMOOTH_SCROLL_MASK,
+		  None,
+		  time)
 		 
 	def _stop_grab(self):
 		if not self.is_grab:
@@ -339,7 +356,22 @@ class DashView(Clutter.Stage):
 			return True
 		return False
 
+	def leave_notify(self, widget, event):
+		print("LEAVE")
+
+	def enter_notify(self, widget, event):
+		print("ENTER")
+
+	def key_focus_in(self, event, data = None):
+		print("focus_in #DashView")
+
+	def key_focus_out(self, event, date = None):
+		print("focus_out #DashView")
+
+
 	def button_press_handler(self, widget, event):
+		print("button press")
+		print(event)
 		widget = self.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
 		if widget == self.intext:
 			self.set_key_focus(self.intext)
@@ -348,7 +380,6 @@ class DashView(Clutter.Stage):
 			self.hide()
 			return True
 		return False
-
 
 	def handle_text_changed(self, data = None):
 		self.apps.hide_all()
@@ -416,6 +447,16 @@ class DashView(Clutter.Stage):
 		|Gdk.WindowAttributesType.Y
 		|Gdk.WindowAttributesType.NOREDIR
 		|Gdk.WindowAttributesType.TYPE_HINT)
+		
+		
+	def xxx_deactivate(self, data0, data1 = None):
+		print("activate #DashView")
+		
+	def xxx_activate(self, data0, data1 = None):
+		print("deactivate #DashView")
+		
+	def test_filter(self, event):
+		print(event)
 
 class PanelView(Clutter.Stage):
 	def __init__(self):
@@ -426,7 +467,9 @@ class PanelView(Clutter.Stage):
 		
 		display = ClutterGdk.get_default_display()
 		root_height = display.get_default_screen().get_root_window().get_height()
-
+		
+		screen = Wnck.Screen.get_default()
+		screen.connect("active-window-changed", self.on_active_window_change)
 		# tricks to create the window
 
 		ClutterGdk.set_stage_foreign(self, self.window)
@@ -441,15 +484,21 @@ class PanelView(Clutter.Stage):
 		self.set_color(Clutter.Color.new(32,32,32,128))
 		self.set_scale(1.0, 1.0)
 
-		self.dash = DashView(self)
+		self.dash = DashView()
 		self.connect('button-press-event', self.button_press_handler)
 		self.show()
 		self.window.move(0,0)
+		
+		self.connect("key-focus-in", self.key_focus_in)
+		self.connect("key-focus-out", self.key_focus_out)
+		self.connect("activate", self.xxx_activate)
+		self.connect("deactivate", self.xxx_deactivate)
  				
 
 	def button_press_handler(self, widget, event):
+		print(event)
 		if event.button == 1:
-			self.dash.show(event.time)
+			self.dash.show(self, event.time)
 			self.dash.window.focus(event.time)
 		elif event.button == 3:
 			Clutter.main_quit()
@@ -476,6 +525,23 @@ class PanelView(Clutter.Stage):
 		|Gdk.WindowAttributesType.VISUAL
 		|Gdk.WindowAttributesType.X
 		|Gdk.WindowAttributesType.Y)
+		
+	def key_focus_in(self, event, data = None):
+		print("focus_in")
+
+	def key_focus_out(self, event, date = None):
+		print("focus_out")
+		
+	def xxx_activate(self, event, date = None):
+		print("activate #PanelView")
+	
+	def xxx_deactivate(self, event, date = None):
+		print("deactivate #PanelView")
+		
+	def on_active_window_change(self, screen, window):
+		if(self.window.get_xid() != screen.get_active_window().get_xid()):
+			# TODO HIDE ALL
+			self.dash.hide()
 
 if __name__ == '__main__':
  Gdk.init(sys.argv)
