@@ -443,6 +443,7 @@ class SubWindow(Clutter.Stage):
 		self.is_grab = False
 		self._create_menu_window()
 		ClutterGdk.set_stage_foreign(self, self.window)
+		self.window.set_transient_for(parent.window)
 
 		self.parent = parent
 		self.set_user_resizable(False)
