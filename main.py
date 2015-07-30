@@ -5,11 +5,13 @@ import os
 import re
 import sys
 
+import datetime #Clock
+
 import signal
 import time
 
-import gc
-import pprint
+import gc # debug
+import pprint # debug 
 
 from math import *
 
@@ -51,6 +53,9 @@ color_menu_entry = Clutter.Color.new(255,255,255,255) # red,green,blue,alpha
 
 font_icon_entry = "Sans Bold 8"
 color_icon_entry = Clutter.Color.new(128,128,128,255) # red,green,blue,alpha
+
+font_clock = "Sans Bold 12"
+color_clock = Clutter.Color.new(255,255,255,255) # red,green,blue,alpha
 
 
 def sig_int_handler(n):
@@ -839,14 +844,15 @@ class PanelIcon(Clutter.Group):
 	def __init__(self, panel, icon, ico_size, margin = 2/3):
 		super().__init__()
 		self.panel = panel
-		self.icon_size = ico_size
+		self.icon_size_x = ico_size
+		self.icon_size_y = ico_size
 		self.sub_icon_size = ico_size*margin
-		self.sub_offset = (self.icon_size-self.sub_icon_size)/2
+		self.sub_offset = (self.icon_size_x-self.sub_icon_size)/2
 		self.icon = icon
 		self.icon.set_size(self.sub_icon_size,self.sub_icon_size)
 
 		self.icon_back = ItemMenu()
-		self.icon_back.set_size(ico_size,ico_size)
+		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
 		self.icon_back.set_reactive(True)
 
 		self.icon_back.connect("button-press-event", self.button_press_handler)
@@ -866,30 +872,34 @@ class PanelIcon(Clutter.Group):
 		self.icon_back.set_position(x,y)
 
 
-
 class PanelClock(Clutter.Group):
 	def __init__(self, panel, ico_size):
 		super().__init__()
 		self.panel = panel
-		self.icon_size = ico_size
-		self.sub_icon_size = ico_size*margin
-		self.sub_offset = (self.icon_size-self.sub_icon_size)/2
-		self.icon = Clutter.Text.new_full(font_clock, u"12:30",
-Clutter.Color.new(255,255,255,128))
-		self.icon.set_size(self.sub_icon_size,self.sub_icon_size)
+		self.icon_size_x = ico_size
+		self.icon_size_y = ico_size/2
+		self.sub_offset = 2
+		#self.sub_icon_size = ico_size*margin
+		#self.sub_offset = (self.icon_size-self.sub_icon_size)/2
+		self.text = Clutter.Text.new_full(font_clock, u"12:30",
+color_clock)
+		#self.text.set_line_alignment(Pango.Alignment.CENTER)
+		#self.text.set_size(ico_size, ico_size/2)
 
 		self.icon_back = ItemMenu()
-		self.icon_back.set_size(ico_size,ico_size)
-
-		self.icon_back.connect("button-press-event", self.button_press_handler)
+		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
 
 		self.add_child(self.icon_back)
-		self.add_child(self.icon)
+		self.add_child(self.text)
 
 		
 	
 	def set_position(self,x, y):
-		self.icon.set_position(x+self.sub_offset,y+self.sub_offset)
+		now = datetime.datetime.now()
+		self.text.set_text(now.strftime('%H:%M'))
+		self.sub_offset_x = (self.icon_size_x-self.text.get_width())/2
+		self.sub_offset_y = (self.icon_size_y-self.text.get_height())/2
+		self.text.set_position(x+self.sub_offset_x,y+self.sub_offset_y)
 		self.icon_back.set_position(x,y)
 
 
@@ -1034,6 +1044,8 @@ class PanelView(Clutter.Stage):
 		self.list_group_apps=[]
 		self.list_sys_apps=[]
 
+
+		self.list_sys_apps.append(PanelClock(self, self.ico_size))
 		self.list_sys_apps.append(PanelApps(self, self.ico_size))
 		self.list_sys_apps.append(PanelShutdown(self, self.ico_size))
 
@@ -1194,7 +1206,7 @@ class PanelView(Clutter.Stage):
 		# Update icon position
 		pos_y = self.get_height()
 		for grp in self.list_sys_apps:
-			pos_y -= grp.icon_size+self.margin
+			pos_y -= grp.icon_size_y+self.margin
 			print(pos_y)			
 			grp.set_position(self.margin, pos_y+self.margin)
 			
@@ -1238,7 +1250,7 @@ class PanelView(Clutter.Stage):
 	def on_active_window_change(self, screen, window):
 		if(self.window.get_xid() != screen.get_active_window().get_xid()):
 			# TODO HIDE ALL SUB WINDOWS
-			self.dash_slide.hide()
+			self.sub_reset()
 
 	def sub_reset(self, event_time = 0):
 		self.dash_slide.hide()
