@@ -42,7 +42,7 @@ import subprocess
 font_dash = "Sans 12"
 color_apps = Clutter.Color.new(255,255,255,255)
 
-font_entry = "Sans Bold 30"
+font_entry = "Sans Bold 15"
 color_entry = Clutter.Color.new(255,255,255,255) # red,green,blue,alpha
 
 
@@ -441,7 +441,7 @@ class SubWindow(Clutter.Stage):
 	def __init__(self, parent, x, y, width, height):
 		super().__init__()
 		self.is_grab = False
-		self._create_menu_window()
+		self._create_menu_window(x, y, width, height)
 		ClutterGdk.set_stage_foreign(self, self.window)
 		self.window.set_transient_for(parent.window)
 
@@ -454,16 +454,16 @@ class SubWindow(Clutter.Stage):
 		self.set_scale(1.0, 1.0)
 		self.set_accept_focus(True)
 
-	def _create_menu_window(self):
+	def _create_menu_window(self,x, y, width, height):
 		display = ClutterGdk.get_default_display()
 		self.root_height = display.get_default_screen().get_root_window().get_height()
 	
 		attr = Gdk.WindowAttr();
 		attr.title = "sub-win"
-		attr.width = 100
-		attr.height = 100
-		attr.x = 100
-		attr.y = 100
+		attr.width = width
+		attr.height = height
+		attr.x = x
+		attr.y = y
 		attr.event_mask = 0
 		attr.window_type = Gdk.WindowType.TOPLEVEL
 		attr.visual = display.get_default_screen().get_rgba_visual()
@@ -523,11 +523,159 @@ class ItemMenu(Clutter.Rectangle):
 			item.add_transition("fade_out", item.fade_out_transition)
 		return True
 
+class Slide(SubWindow):
+	def __init__(self, parent, offset_x, size_x):
+		self.parent = parent
+		display = ClutterGdk.get_default_display()
+		self.root_height = display.get_default_screen().get_root_window().get_height()
+		print(size_x)
+		print(self.root_height)
+		super().__init__(parent, offset_x, 0, size_x, self.root_height)
+
+
+	def show(self, event_time):
+		print("Dash show")
+		parent_window = ClutterGdk.get_stage_window(self.parent)
+		self.window.set_transient_for(parent_window)
+		self.reset()
+		super().show()
+		self.window.focus(event_time)
+		self.set_move(0)
+		
+
+
+class DashSlide(Slide):
+	def __init__(self, parent, offset_x):
+		self.slide_size = 300
+		super().__init__(parent, offset_x, self.slide_size)
+
+		self.rect = Clutter.Actor()
+		self.rect.set_x(-self.slide_size)
+		self.rect.set_y(0)
+		self.rect.set_size(self.slide_size,self.root_height)
+		self.rect.set_background_color(Clutter.Color.new(32,32,32,200))	
+		
+		#Enable animation
+		self.rect.save_easing_state();
+		self.rect.set_easing_mode(Clutter.AnimationMode.EASE_IN_OUT_CUBIC);
+		self.rect.set_easing_duration(1000);
+
+		self.add_child(self.rect)
+
+		self.pos = 200
+
+		#init slide 
+		self.ico_size = 104
+		self.margin_x = 10
+		self.text_size = 64
+		self.back_text = ItemMenu()
+		self.back_text.set_x(0)
+		self.back_text.set_y(self.root_height-self.text_size)
+		self.back_text.set_size(self.slide_size, self.text_size)
+
+		self.intext = Clutter.Text.new_full(font_entry, u"", color_entry)
+		self.apps = apps_handler(self)
+		self.intext.set_editable(True)
+		self.intext.set_selectable(True)
+		self.intext.set_activatable(True)
+
+		self.notext = Clutter.Text.new_full(font_entry, u"Enter Text Here ...",
+Clutter.Color.new(255,255,255,128))
+		self.text_offset = (self.text_size-self.notext.get_height())/2
+
+		self.notext.set_x(self.margin_x)
+		self.notext.set_y(self.root_height-self.text_size + self.text_offset)
+		self.notext.set_width(self.slide_size-self.margin_x*2)
+
+		self.intext.set_x(self.margin_x)
+		self.intext.set_y(self.root_height-self.text_size + self.text_offset)
+		self.intext.set_width(self.slide_size-self.margin_x*2)		
+
+		self.notext.show()
+		self.intext.show()
+
+		self.add_child(self.notext)
+		self.add_child(self.intext)
+		self.add_child(self.back_text)
+
+		self.apps.hide_all()
+		self.set_key_focus(self.intext)
+
+		
+		# check for enter or Escape
+		self.intext.connect("key-press-event", self.key_press_handler)
+		self.intext.connect('text-changed', self.handle_text_changed)
+
+		self.connect('button-press-event', self.button_press_handler)		
+		self.connect('key-press-event', self.key_press_handler)
+		self.connect('allocation-changed', self.allocation_changed_handler)
+		#self.show()
+
+	def reset(self):
+		self.rect.restore_easing_state();
+		self.rect.set_x(-self.slide_size)
+		self.rect.save_easing_state();
+
+	def set_move(self, x):
+		self.set_key_focus(self.intext)
+		self.rect.set_x(x)
+
+	def key_press_handler(self, widget, event):
+		if event.keyval == Clutter.KEY_Escape:
+			self.hide()
+			return True
+		elif event.keyval == Clutter.KEY_Return:
+			if len(self.apps_list) == 1:
+				self.apps_list[0].call()
+				self.hide()
+			return True
+		return False
+
+	def button_press_handler(self, widget, event):
+		widget = self.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
+		if widget == self.intext:
+			self.set_key_focus(self.intext)
+			return True
+		elif not widget:
+			self.hide()
+			return True
+		return False
+
+
+	def handle_text_changed(self, data = None):
+		self.apps.hide_all()
+		text = self.intext.get_text()
+		print("XXXX"+text)
+		if not text:
+			text = u""
+		self.apps_list = self.apps.filter_apps(text)
+		layout = launcher_layout(self, len(self.apps_list))
+		if text == u"":
+			self.notext.show()
+		else:
+			self.notext.hide()
+		self.current_actor = list()
+ 
+		for i in range(0, layout.columns*layout.rows):
+			if i >= len(self.apps_list):
+				break
+			c = i - floor(i / layout.columns)*layout.columns
+			l = floor(i / layout.columns)
+			a = self.apps_list[i]
+			a.set_position(c*layout.size*1.5*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.y_offset+layout.top_margin)
+			a.show()
+			self.current_actor.append(a)
+		pass
+
+	def allocation_changed_handler(self, box, flags, data):
+		# indirectly update the layout:
+		self.handle_text_changed(data)
+		pass
 class PanelMenu(SubWindow):
 	def __init__(self, parent):
 		super().__init__(parent, 0, 0, 100, 100)
 		
-		self.item_height = 32
+		self.item_height = 31
 		self.item_margin_y = 2
 		self.item_margin_x = 20
 		self.global_width = 0
@@ -663,6 +811,7 @@ class PanelIcon(Clutter.Group):
 		self.icon_back.set_size(ico_size,ico_size)
 		self.icon_back.set_reactive(True)
 
+		self.icon_back.connect("button-press-event", self.button_press_handler)
 		#Enable animation
 		#self.save_easing_state();
 		#self.set_easing_mode(Clutter.AnimationMode.EASE_IN_OUT_CUBIC);
@@ -671,19 +820,28 @@ class PanelIcon(Clutter.Group):
 		self.add_child(self.icon_back)
 		self.add_child(self.icon)
 
+		
+		
+
 	def set_position(self,x, y):
 		self.icon.set_position(x+self.sub_offset,y+self.sub_offset)
 		self.icon_back.set_position(x,y)
 
 
+class PanelApps(PanelIcon):
+	def __init__(self, panel, ico_size):
+		super().__init__(panel,  Clutter.Texture.new_from_file("./data/open.svg"), ico_size, 2/3)
+		
+	
+	def button_press_handler(self, widget, event):
+		self.panel.sub_dash(event.time)
+
 class PanelShutdown(PanelIcon):
 	def __init__(self, panel, ico_size):
-		super().__init__(panel,  Clutter.Texture.new_from_file("./data/logout.png"), ico_size, 1)
-		
-		self.icon_back.connect("button-press-event", PanelShutdown.button_press_handler, self)
+		super().__init__(panel,  Clutter.Texture.new_from_file("./data/shutdown.svg"), ico_size, 2/3)
 		
 
-	def button_press_handler(widget, event, self):
+	def button_press_handler(self, widget, event):
 		menu_list = [
 			{'text':"Shutdown",'obj':Shutdown()},
 			{'text':"Log Out",'obj':Logout()},
@@ -691,8 +849,7 @@ class PanelShutdown(PanelIcon):
 			{'text':"Reboot",'obj':Reboot()},
 			]
 
-		self.panel.panel_menu.show_menu(self.panel.panel_width, self.icon_back.get_y(), menu_list, event.time)	
-		self.panel.panel_menu.window.focus(event.time)
+		self.panel.sub_menu(self.icon_back.get_y(), menu_list, event.time)	
 
 class PanelGroupApp(PanelIcon):
 	def __init__(self, panel, name, icon, ico_size):
@@ -701,7 +858,6 @@ class PanelGroupApp(PanelIcon):
 		self.name = name
 		self.locked = False
 
-		self.icon_back.connect("button-press-event", PanelGroupApp.button_press_handler, self)
 
 		#self.icon_text = Clutter.Text.new_full(font_menu_entry, "", Clutter.Color.new(255,255,255,255))
 		#self.add_child(self.icon_text)
@@ -742,7 +898,7 @@ class PanelGroupApp(PanelIcon):
 		return self.name
 
 
-	def button_press_handler(widget, event, self):
+	def button_press_handler(self, widget, event):
 		if event.button == 1:
 			if len(self.app_list) > 1:
 				menu_list = []
@@ -752,10 +908,10 @@ class PanelGroupApp(PanelIcon):
 					menu['obj'] = iapp
 					menu_list.append(menu)
 
-				self.panel.panel_menu.show_menu(self.panel.panel_width, self.icon_back.get_y(), menu_list, event.time)	
-				self.panel.panel_menu.window.focus(event.time)
+
+				self.panel.sub_menu(self.icon_back.get_y(), menu_list, event.time)	
 			else:
-				self.panel.panel_menu.hide_menu()
+				self.panel.sub_reset(event.time)
 				for k,iapp in self.app_list.items():
 					iapp.activate(event.time)
 					break
@@ -801,9 +957,9 @@ class PanelView(Clutter.Stage):
 
 		self.connect('button-press-event', PanelView.button_press_handler, self)
 		# create dash view
-		self.dash = DashView(self)
+		#self.dash = DashView(self)
 		self.panel_menu = PanelMenu(self)
-		#
+		self.dash_slide = DashSlide(self, self.panel_width)
 		
 
 		# Dictionnary of apps
@@ -811,6 +967,7 @@ class PanelView(Clutter.Stage):
 		self.list_group_apps=[]
 		self.list_sys_apps=[]
 
+		self.list_sys_apps.append(PanelApps(self, self.ico_size))
 		self.list_sys_apps.append(PanelShutdown(self, self.ico_size))
 
 		self.update_cnt = 0
@@ -840,7 +997,7 @@ class PanelView(Clutter.Stage):
 		return True
 
 	def find_ico(self, name):
-		ret = self.dash.apps.filter_apps(name)
+		ret = self.dash_slide.apps.filter_apps(name)
 		if ret:
 			return ret[0].get_icon(self.ico_size)
 		else:
@@ -981,6 +1138,9 @@ class PanelView(Clutter.Stage):
 			#self.panel_menu.hide_menu()
 			#self.dash.show(event.time)
 			#self.dash.window.focus(event.time)
+			#self.dash_slide.show(event.time)
+			#self.panel_menu.hide_menu()
+
 		elif event.button == 3:
 			Clutter.main_quit()
 
@@ -1009,6 +1169,19 @@ class PanelView(Clutter.Stage):
 		|Gdk.WindowAttributesType.Y)
 
 
+	def sub_reset(self, event_time = 0):
+		self.dash_slide.hide()
+		self.panel_menu.hide_menu()
+		
+		
+	def sub_dash(self, event_time):
+		self.dash_slide.show(event_time)
+		self.panel_menu.hide_menu()
+
+	def sub_menu(self, offset_y, menu_list, event_time):
+		self.dash_slide.hide()
+		self.panel_menu.show_menu(self.panel_width, offset_y, menu_list, event_time)	
+		self.panel_menu.window.focus(event_time)
 #####
 ####
 def dbus_login1(bus):
