@@ -671,10 +671,48 @@ Clutter.Color.new(255,255,255,128))
 		# indirectly update the layout:
 		self.handle_text_changed(data)
 		pass
+		
+	def _start_grab(self, time):
+		if self.is_grab:
+			return
+		print("START GRABBING")
+		self.is_grab = True
+		dpy = ClutterGdk.get_default_display()
+		dm = dpy.get_device_manager()
+		dev = dm.list_devices(Gdk.DeviceType.MASTER)
+		for d in dev:
+		 # grab keyboard until the dash is hiden
+		 if d.get_source() == Gdk.InputSource.KEYBOARD:
+		  d.grab(self.window, Gdk.GrabOwnership.WINDOW, True,
+		  Gdk.EventMask.KEY_PRESS_MASK
+		  |Gdk.EventMask.KEY_RELEASE_MASK,
+		  None,
+		  time)
+		 
+	def _stop_grab(self):
+		if not self.is_grab:
+			return
+		self.is_grab = False
+		dpy = ClutterGdk.get_default_display()
+		dm = dpy.get_device_manager()
+		dev = dm.list_devices(Gdk.DeviceType.MASTER)
+		for d in dev:
+		 d.ungrab(Gdk.CURRENT_TIME)
+		 
+	def show(self, time):
+		super().show(time)
+		self._start_grab(time)
+		
+	def hide(self):
+		self._stop_grab()
+		super().hide()
+		
+		
 class PanelMenu(SubWindow):
 	def __init__(self, parent):
 		super().__init__(parent, 0, 0, 100, 100)
 		
+		self.is_grab = False
 		self.item_height = 31
 		self.item_margin_y = 2
 		self.item_margin_x = 20
@@ -688,11 +726,9 @@ class PanelMenu(SubWindow):
 	def event_menu_button_press(widget, event, self,  menu):
 		print('PANEL KEYPRESS')
 		menu['obj'].activate(event.time)
-		self.hide_menu()
 
 	def event_menu_focus_out(widget, event, self):
 		print('FOCUS OUT')
-		self.hide_menu()
 
 	def show_menu(self, x, y, menulist, event_time):
 		print('SHOW MENU')
@@ -753,13 +789,16 @@ class PanelMenu(SubWindow):
 		self.set_size(self.global_width, self.global_height)	
 		self.rect.set_size(self.global_width, self.global_height)	
 		
-		self.window.focus(event_time)
 		self.show_all()
+		# Focus can only apply on visible window /!\
+		self.window.focus(event_time)
+		self._start_grab()
 		pass
 
 	def hide_menu(self):
 		self.hide()
 		self.remove_all()
+
 
 class PanelApp():
 	def __init__(self, xid, name, group):
@@ -968,7 +1007,9 @@ class PanelView(Clutter.Stage):
 
 		display = ClutterGdk.get_default_display()
 		root_height = display.get_default_screen().get_root_window().get_height()
-
+		
+		screen = Wnck.Screen.get_default()
+		screen.connect("active-window-changed", self.on_active_window_change)
 		# tricks to create the window
 		ClutterGdk.set_stage_foreign(self, self.window)
 		self.window.set_type_hint(Gdk.WindowTypeHint.DOCK)
@@ -1087,19 +1128,19 @@ class PanelView(Clutter.Stage):
 							ico.set_from_rgb_data(data, pix.get_has_alpha(), width, height, rowstride, bpp,0 );
 							#ico_data=  pix.get_pixels_array()
 
-						print('Create new group:' + str(group_name))
+						#print('Create new group:' + str(group_name))
 						grp = PanelGroupApp(self,group_name,ico,self.ico_size)
 						
-						print(sys.getrefcount(grp))
+						#print(sys.getrefcount(grp))
 						self.rect.add_child(grp)
-						print(sys.getrefcount(grp))
+						#print(sys.getrefcount(grp))
 						self.list_group_apps.append(grp)
-						print(sys.getrefcount(grp))
+						#print(sys.getrefcount(grp))
 	
 					# Append app to dict
-					print(sys.getrefcount(grp))					
+					#print(sys.getrefcount(grp))					
 					iapp=PanelApp(xid, name, grp)
-					print(sys.getrefcount(grp))
+					#print(sys.getrefcount(grp))
 					self.dict_apps[xid] = iapp
 				
 				
@@ -1195,6 +1236,10 @@ class PanelView(Clutter.Stage):
 		|Gdk.WindowAttributesType.X
 		|Gdk.WindowAttributesType.Y)
 
+	def on_active_window_change(self, screen, window):
+		if(self.window.get_xid() != screen.get_active_window().get_xid()):
+			# TODO HIDE ALL SUB WINDOWS
+			self.dash_slide.hide()
 
 	def sub_reset(self, event_time = 0):
 		self.dash_slide.hide()
