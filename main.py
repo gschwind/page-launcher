@@ -792,7 +792,6 @@ class PanelMenu(SubWindow):
 		self.show_all()
 		# Focus can only apply on visible window /!\
 		self.window.focus(event_time)
-		self._start_grab()
 		pass
 
 	def hide_menu(self):
