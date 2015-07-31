@@ -41,7 +41,11 @@ from dbus.mainloop.glib import DBusGMainLoop
 import shlex
 import subprocess
 
-font_dash = "Sans 12"
+
+font_comment = "Sans 8"
+color_comment = Clutter.Color.new(128,128,128,255)
+
+font_dash = "Sans Bold 12"
 color_apps = Clutter.Color.new(255,255,255,255)
 
 font_entry = "Sans Bold 15"
@@ -68,63 +72,84 @@ class apps_entry:
   self.ico_size = parent.ico_size
   self.name = de.getName().lower()
   self.generic_name = de.getGenericName().lower()
+  #print(self.generic_name)
+  #print(de.getExec())
   self.comment = de.getComment().lower()
   self.exe = re.sub(u"%\w*", u"", de.getExec())
+  #print(self.exe)
   self.icon_name = de.getIcon()
-  self.icon = self._find_icon(de.getIcon())
-  self.icon.set_size(self.ico_size,self.ico_size)
+  self.icon = self._find_icon(de.getIcon(),self.ico_size)
+
+  self.icon_offset_y = (parent.item_size_y-self.ico_size)/2
+  self.icon_offset_x = parent.item_size_x-self.ico_size-self.icon_offset_y
+  self.text_offset_x = self.icon_offset_y
+  self.text_offset_y = self.icon_offset_y
+
+  self.icon.set_size(parent.ico_size,parent.ico_size)
+  #self.icon.set_size(self.ico_size,self.ico_size)
+
   self.text = Clutter.Text.new_full(font_dash, de.getName(), color_apps)
-  self.text.set_width(self.ico_size*1.5)
-  self.text.set_ellipsize(Pango.EllipsizeMode.END)
+  self.text.set_width(self.icon_offset_x - self.icon_offset_y)
+  #self.text.set_ellipsize(Pango.EllipsizeMode.END)
   self.text.set_line_alignment(Pango.Alignment.CENTER)
-  self.rect = Clutter.Rectangle.new()
-  self.rect.set_size(self.ico_size*1.2*1.5,self.ico_size*1.2*1.5)
-  self.rect.set_color(Clutter.Color.new(255,255,255,128))
-  self.rect.set_reactive(True)
-  self.rect.set_opacity(0)
-  self.rect.connect("enter-event", self.enter_handler, self)
-  self.rect.connect("leave-event", self.leave_handler, self)
+  self.rect = ItemMenu()  
+  #self.rect = Clutter.Rectangle.new()
+  self.rect.set_size(parent.item_size_x,parent.item_size_y)
+  #self.rect.set_color(Clutter.Color.new(255,255,255,128))
+  #self.rect.set_reactive(True)
+  #self.rect.set_opacity(0)
+  #self.rect.connect("enter-event", self.enter_handler, self)
+  #self.rect.connect("leave-event", self.leave_handler, self)
   self.rect.connect("button-press-event", apps_entry.button_press_handler, self)
-  self.fade_in_transition = Clutter.PropertyTransition.new("opacity")
-  self.fade_in_transition.set_duration(100)
-  self.fade_in_transition.set_to(255)
-  self.fade_in_transition.connect("completed", self.fade_in_completed, self)
-  self.fade_out_transition = Clutter.PropertyTransition.new("opacity")
-  self.fade_out_transition.set_duration(2000)
-  self.fade_out_transition.set_to(0)
-  self.fade_out_transition.connect("completed", self.fade_out_completed, self)
+  #self.fade_in_transition = Clutter.PropertyTransition.new("opacity")
+  #self.fade_in_transition.set_duration(100)
+  #self.fade_in_transition.set_to(255)
+  #self.fade_in_transition.connect("completed", self.fade_in_completed, self)
+  #self.fade_out_transition = Clutter.PropertyTransition.new("opacity")
+  #self.fade_out_transition.set_duration(2000)
+  #self.fade_out_transition.set_to(0)
+  #self.fade_out_transition.connect("completed", self.fade_out_completed, self)
+
+
+  self.text_comment_offset_x = 2*self.icon_offset_y
+  self.text_comment_offset_y = self.icon_offset_y+self.text.get_height()+parent.margin
+  self.text_comment = Clutter.Text.new_full(font_comment, self.comment, color_comment)
+  self.text_comment.set_width(self.icon_offset_x - self.icon_offset_y - self.text_comment_offset_x)
+  self.text_comment.set_line_wrap(True)
+
   self.parent.add_child(self.rect)
   self.parent.add_child(self.icon)
   self.parent.add_child(self.text)
+  self.parent.add_child(self.text_comment)
   self.hide()
   pass
 
- def enter_handler(self, widget, event, self1):
-  if self.rect.get_transition("fade_out"):
-   self.rect.remove_transition("fade_out")
-  if not self.rect.get_transition("fade_in"):
-   self.rect.add_transition("fade_in", self.fade_in_transition)
-  return True
- def leave_handler(self, widget, event, self1):
-  if self.rect.get_transition("fade_in"):
-   self.rect.remove_transition("fade_in")
-  if not self.rect.get_transition("fade_out"):
-   self.rect.add_transition("fade_out", self.fade_out_transition)
-  return True
+ #def enter_handler(self, widget, event, self1):
+ # if self.rect.get_transition("fade_out"):
+ #  self.rect.remove_transition("fade_out")
+ # if not self.rect.get_transition("fade_in"):
+ #  self.rect.add_transition("fade_in", self.fade_in_transition)
+ # return True
+ #def leave_handler(self, widget, event, self1):
+ # if self.rect.get_transition("fade_in"):
+ #  self.rect.remove_transition("fade_in")
+ # if not self.rect.get_transition("fade_out"):
+ #  self.rect.add_transition("fade_out", self.fade_out_transition)
+ # return True
 
- def get_icon(self, size = 128):
+ def get_icon(self, size = 48):
   return self._find_icon(self.icon_name, size)
 
- def _find_icon(self, icon_name, size = 128):
+ def _find_icon(self, icon_name, size = 48):
   icon_theme = Gtk.IconTheme.get_default()
-  gtk_icon_info = icon_theme.lookup_icon(icon_name, 128, 0)
+  gtk_icon_info = icon_theme.lookup_icon(icon_name, size, 0)
   if gtk_icon_info:
    icon_path = gtk_icon_info.get_filename()
   else:
    icon_path = getIconPath(icon_name, size)
 
   if (icon_path and re.match("^.*\.svg$", icon_path)) or not icon_path:
-   gtk_icon_info = icon_theme.lookup_icon("exec", 128, 0)
+   gtk_icon_info = icon_theme.lookup_icon("exec", size, 0)
    if gtk_icon_info:
     icon_path = gtk_icon_info.get_filename()
    else:
@@ -135,29 +160,32 @@ class apps_entry:
   self.rect.show()
   self.icon.show()
   self.text.show()
+  self.text_comment.show()
   pass
  def hide(self):
   self.rect.hide()
   self.icon.hide()
   self.text.hide()
+  self.text_comment.hide()
   pass
 
  def set_position(self, x, y):
-  self.rect.set_position(x-self.ico_size*0.10,y-self.ico_size*0.10)
-  self.icon.set_position(x,y)
-  self.text.set_position(x,y+self.ico_size*1.10)
+  self.rect.set_position(x,y)
+  self.icon.set_position(x+self.icon_offset_x,y+self.icon_offset_y)
+  self.text.set_position(x+self.text_offset_x,y+self.text_offset_y)
+  self.text_comment.set_position(x+self.text_comment_offset_x,y+self.text_comment_offset_y)
   pass
 
- def fade_in_completed(self, transition, self1):
-  if self.rect.get_transition("fade_in"):
-   self.rect.remove_transition("fade_in")
-  self.rect.set_opacity(255)
-  pass
- def fade_out_completed(self, transition, self1):
-  if self.rect.get_transition("fade_out"):
-   self.rect.remove_transition("fade_out")
-  self.rect.set_opacity(0)
-  pass
+ #def fade_in_completed(self, transition, self1):
+ # if self.rect.get_transition("fade_in"):
+ #  self.rect.remove_transition("fade_in")
+ # self.rect.set_opacity(255)
+ # pass
+ #def fade_out_completed(self, transition, self1):
+ # if self.rect.get_transition("fade_out"):
+ #  self.rect.remove_transition("fade_out")
+ # self.rect.set_opacity(0)
+ # pass
 
  def button_press_handler(widget, event, self):
   if event.button == Clutter.BUTTON_PRIMARY:
@@ -196,12 +224,15 @@ class apps_handler:
   pass
 
  def filter_apps(self, patern):
+  print("pattern:"+patern)
   p = re.compile(patern.lower())
   ret = list()
   for de in self._apps:
    if p.search(de.name):
     ret.append(de)
    elif p.search(de.generic_name):
+    ret.append(de)
+   elif p.search(de.exe):
     ret.append(de)
    elif p.search(de.comment):
     ret.append(de)
@@ -215,15 +246,16 @@ class apps_handler:
 
 class launcher_layout:
  def __init__(self, stage, napps):
-   self.size = stage.ico_size
-   self.y_offset = stage.intext.get_height()
+   self.size_x = stage.item_size_x
+   self.size_y = stage.item_size_y + stage.margin
+   self.y_offset = stage.y_offset
    self.width = stage.get_width()
    self.height = stage.get_height() - self.y_offset
-   self.columns = int(floor(self.width/(self.size*1.5*1.3)))
-   self.rows = int(floor(self.height/(self.size*1.5*1.3)))
-   self.left_margin = (self.width-(self.columns*self.size*1.5*1.3))/2.0
-   self.top_margin = (self.height-(self.rows*self.size*1.5*1.3))/2.0
-   npages = int(floor(napps/self.columns*self.rows)+1.0)
+   self.columns = int(floor(self.width/(self.size_x)))
+   self.rows = int(floor(self.height/(self.size_y)))
+   #self.left_margin = (self.width-(self.columns*self.size*1.5*1.3))/2.0
+   #self.top_margin = (self.height-(self.rows*self.size*1.5*1.3))/2.0
+   #npages = int(floor(napps/self.columns*self.rows)+1.0)
  pass
 
 
@@ -252,195 +284,6 @@ class DBusWidget(dbus.service.Object):
   Clutter.main_quit()
   pass
  pass
-
-class DashView(Clutter.Stage):
-	def __init__(self, parent):
-		super().__init__()
-		self.is_grab = False
-		self._create_dash_window()
-		ClutterGdk.set_stage_foreign(self, self.window)
-				
-		self.ico_size = 104
-		self.parent = parent
-		self.set_user_resizable(False)
-		self.set_title("page-dash")
-		self.set_use_alpha(True)
-		self.set_opacity(200)
-		self.set_color(Clutter.Color.new(32,32,32,128))
-		self.set_scale(1.0, 1.0)
-		self.set_accept_focus(True)
-
-		self.notext = Clutter.Text.new_full(font_entry, u"Enter Text Here",
-		 Clutter.Color.new(255,255,255,128))
-		self.add_child(self.notext)
-		self.notext.show()
-		
-		
-		self.intext = Clutter.Text.new_full(font_entry, u"", color_entry)
-		self.apps = apps_handler(self)
-		self.intext.set_editable(True)
-		self.intext.set_selectable(True)
-		self.intext.set_activatable(True)
-		
-
-		self.add_child(self.intext)
-		self.intext.show()
-
-		#self.selected_rect = Clutter.Rectangle.new()
-		#self.selected_rect.set_size(self.ico_size*1.3,self.ico_size*1.3*1.5)
-		#self.selected_rect.set_color(Clutter.Color.new(128,128,128,128))
-		#self.selected_rect.hide()
-		#self.add_child(self.selected_rect)
-
-		self.apps.hide_all()
-		self.set_key_focus(self.intext)
-
-		self.connect('button-press-event', self.button_press_handler)
-		
-		# check for enter or Escape
-		self.intext.connect("key-press-event", self.key_press_handler)
-		self.connect('key-press-event', self.key_press_handler)
-		self.connect('allocation-changed', self.allocation_changed_handler)
-		self.intext.connect('text-changed', self.handle_text_changed)
-
-
-	def show(self, time):
-		print("Dash show")
-
-		parent_window = ClutterGdk.get_stage_window(self.parent)
-		self.window.set_transient_for(parent_window)
-		root_height = self.window.get_screen().get_root_window().get_height()
-		self.set_size(500, root_height)
-		self.window.move(32, 0)
-		
-		if self.intext.get_text() == u"":
-			self.notext.show()
-		else:
-			self.notext.hide()
-		
-		super().show()
-		self.window.focus(time)
-		self._start_grab(time)
-		self.set_key_focus(self.intext)
-		
-	def _start_grab(self, time):
-		if self.is_grab:
-			return
-		self.is_grab = True
-		dpy = ClutterGdk.get_default_display()
-		dm = dpy.get_device_manager()
-		dev = dm.list_devices(Gdk.DeviceType.MASTER)
-		for d in dev:
-		 d.grab(self.window, Gdk.GrabOwnership.WINDOW, False,
-		 Gdk.EventMask.BUTTON_PRESS_MASK
-		 |Gdk.EventMask.BUTTON_RELEASE_MASK
-		 |Gdk.EventMask.BUTTON_MOTION_MASK
-		 |Gdk.EventMask.POINTER_MOTION_MASK
-		 |Gdk.EventMask.KEY_PRESS_MASK
-		 |Gdk.EventMask.KEY_RELEASE_MASK,
-		 None,
-		 time)
-		 
-	def _stop_grab(self):
-		if not self.is_grab:
-			return
-		self.is_grab = False
-		dpy = ClutterGdk.get_default_display()
-		dm = dpy.get_device_manager()
-		dev = dm.list_devices(Gdk.DeviceType.MASTER)
-		for d in dev:
-		 d.ungrab(Gdk.CURRENT_TIME)
-
-	def key_press_handler(self, widget, event):
-		if event.keyval == Clutter.KEY_Escape:
-			self.hide()
-			return True
-		elif event.keyval == Clutter.KEY_Return:
-			if len(self.apps_list) == 1:
-				self.apps_list[0].call()
-				self.hide()
-			return True
-		return False
-
-	def button_press_handler(self, widget, event):
-		widget = self.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
-		if widget == self.intext:
-			self.set_key_focus(self.intext)
-			return True
-		elif not widget:
-			self.hide()
-			return True
-		return False
-
-
-	def handle_text_changed(self, data = None):
-		self.apps.hide_all()
-		text = self.intext.get_text()
-		print("XXXX"+text)
-		if not text:
-			text = u""
-		self.apps_list = self.apps.filter_apps(text)
-		layout = launcher_layout(self, len(self.apps_list))
-		if text == u"":
-			self.notext.show()
-		else:
-			self.notext.hide()
-		self.current_actor = list()
- 
-		for i in range(0, layout.columns*layout.rows):
-			if i >= len(self.apps_list):
-				break
-			c = i - floor(i / layout.columns)*layout.columns
-			l = floor(i / layout.columns)
-			a = self.apps_list[i]
-			a.set_position(c*layout.size*1.5*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.y_offset+layout.top_margin)
-			a.show()
-			self.current_actor.append(a)
-		pass
-
-	def activate_handler(self, data):
-		self.set_key_focus(self.intext)
-		pass
-
-	def desactivate_handler(self, data):
-		self.hide()
-		pass
-
-	def allocation_changed_handler(self, box, flags, data):
-		# indirectly update the layout:
-		self.handle_text_changed(data)
-		pass
-		
-	def hide(self):
-		print("Dash hide")
-		self._stop_grab()
-		super().hide()
-		
-		
-	def _create_dash_window(self):
-		display = ClutterGdk.get_default_display()
-		root_height = display.get_default_screen().get_root_window().get_height()
-	
-		attr = Gdk.WindowAttr();
-		attr.title = "page-dash"
-		attr.width = 32
-		attr.height = root_height
-		attr.x = 32
-		attr.y = 0
-		attr.event_mask = 0
-		attr.window_type = Gdk.WindowType.TOPLEVEL
-		attr.visual = display.get_default_screen().get_rgba_visual()
-		attr.override_redirect = True
-		attr.type_hint = Gdk.WindowTypeHint.MENU
-		self.window = Gdk.Window(None, attr,
-		 Gdk.WindowAttributesType.TITLE
-		|Gdk.WindowAttributesType.VISUAL
-		|Gdk.WindowAttributesType.X
-		|Gdk.WindowAttributesType.Y
-		|Gdk.WindowAttributesType.NOREDIR
-		|Gdk.WindowAttributesType.TYPE_HINT)
-
-
 
 class SubWindow(Clutter.Stage):
 	def __init__(self, parent, x, y, width, height):
@@ -554,11 +397,17 @@ class DashSlide(Slide):
 		self.slide_size = 300
 		super().__init__(parent, offset_x, self.slide_size)
 
+		self.margin = 2
+		self.y_offset = 32
+		self.item_size_x = self.slide_size
+		self.item_size_y = 64
+		self.ico_size = 48
+
 		self.rect = Clutter.Actor()
 		self.rect.set_x(-self.slide_size)
 		self.rect.set_y(0)
 		self.rect.set_size(self.slide_size,self.root_height)
-		self.rect.set_background_color(Clutter.Color.new(32,32,32,200))	
+		self.rect.set_background_color(Clutter.Color.new(32,32,32,240))	
 		
 		#Enable animation
 		self.rect.save_easing_state();
@@ -570,7 +419,6 @@ class DashSlide(Slide):
 		self.pos = 200
 
 		#init slide 
-		self.ico_size = 104
 		self.margin_x = 10
 		self.text_size = 64
 		self.back_text = ItemMenu()
@@ -650,7 +498,7 @@ Clutter.Color.new(255,255,255,128))
 	def handle_text_changed(self, data = None):
 		self.apps.hide_all()
 		text = self.intext.get_text()
-		print("XXXX"+text)
+		#print("XXXX"+text)
 		if not text:
 			text = u""
 		self.apps_list = self.apps.filter_apps(text)
@@ -667,7 +515,7 @@ Clutter.Color.new(255,255,255,128))
 			c = i - floor(i / layout.columns)*layout.columns
 			l = floor(i / layout.columns)
 			a = self.apps_list[i]
-			a.set_position(c*layout.size*1.5*1.3+layout.left_margin,l*1.5*1.3*layout.size+layout.y_offset+layout.top_margin)
+			a.set_position(c*layout.size_x,l*layout.size_y+self.margin)
 			a.show()
 			self.current_actor.append(a)
 		pass
@@ -781,8 +629,8 @@ class PanelMenu(SubWindow):
 
 		#self.window.set_size()
 		#dir(self.window)
-		print(self.global_width)
-		print(self.global_height)
+		#print(self.global_width)
+		#print(self.global_height)
 
 		if self.root_height < self.global_height+y:
 			y=self.root_height-self.global_height
@@ -841,12 +689,12 @@ class PanelApp():
 
 
 class PanelIcon(Clutter.Group):
-	def __init__(self, panel, icon, ico_size, margin = 2/3):
+	def __init__(self, panel, icon, ico_size, sub_ico_size):
 		super().__init__()
 		self.panel = panel
 		self.icon_size_x = ico_size
 		self.icon_size_y = ico_size
-		self.sub_icon_size = ico_size*margin
+		self.sub_icon_size = sub_ico_size
 		self.sub_offset = (self.icon_size_x-self.sub_icon_size)/2
 		self.icon = icon
 		self.icon.set_size(self.sub_icon_size,self.sub_icon_size)
@@ -905,7 +753,7 @@ color_clock)
 
 class PanelApps(PanelIcon):
 	def __init__(self, panel, ico_size):
-		super().__init__(panel,  Clutter.Texture.new_from_file("./data/open.svg"), ico_size, 2/3)
+		super().__init__(panel,  Clutter.Texture.new_from_file("./data/open.svg"), ico_size, 48)
 		
 	
 	def button_press_handler(self, widget, event):
@@ -913,7 +761,7 @@ class PanelApps(PanelIcon):
 
 class PanelShutdown(PanelIcon):
 	def __init__(self, panel, ico_size):
-		super().__init__(panel,  Clutter.Texture.new_from_file("./data/shutdown.svg"), ico_size, 2/3)
+		super().__init__(panel,  Clutter.Texture.new_from_file("./data/shutdown.svg"), ico_size, 48)
 		
 
 	def button_press_handler(self, widget, event):
@@ -928,7 +776,7 @@ class PanelShutdown(PanelIcon):
 
 class PanelGroupApp(PanelIcon):
 	def __init__(self, panel, name, icon, ico_size):
-		super().__init__(panel, icon, ico_size)
+		super().__init__(panel, icon, ico_size, 48)
 		self.app_list = {}
 		self.name = name
 		self.locked = False
@@ -949,7 +797,7 @@ class PanelGroupApp(PanelIcon):
 		self.hide_all()
 		self.destroy_all_children()
 		self.get_parent().remove_child(self)
-		print(self.app_list)
+		#print(self.app_list)
 			
 
 
@@ -1126,7 +974,7 @@ class PanelView(Clutter.Stage):
 							ico = self.find_ico(app.get_application().get_name())
 						if ico==None:
 							pix=app.get_icon()
-							pix= pix.scale_simple(128,128,GdkPixbuf.InterpType.BILINEAR)
+							pix= pix.scale_simple(256,256,GdkPixbuf.InterpType.NEAREST)
 							ico = Clutter.Texture.new()
 							data = pix.get_pixels()
 							width = pix.get_width ()
@@ -1137,6 +985,7 @@ class PanelView(Clutter.Stage):
 								bpp = 3
 							rowstride = pix.get_rowstride()
 							ico.set_from_rgb_data(data, pix.get_has_alpha(), width, height, rowstride, bpp,0 );
+							#ico.set_width(48,48)
 							#ico_data=  pix.get_pixels_array()
 
 						#print('Create new group:' + str(group_name))
@@ -1181,15 +1030,15 @@ class PanelView(Clutter.Stage):
 				print('Deleting group:' + str(grp.get_name()))
 		for grp in list_del:
 			
-			print('Deleting group II :' + str(grp.get_name()))
-			print(sys.getrefcount(grp))
-			for r in gc.get_referrers(grp):
-				pprint.pprint(r)	
+			#print('Deleting group II :' + str(grp.get_name()))
+			#print(sys.getrefcount(grp))
+			#for r in gc.get_referrers(grp):
+			#	pprint.pprint(r)	
 			self.list_group_apps.remove(grp)	
 			grp.unregister()
-			print(sys.getrefcount(grp))
-			for r in gc.get_referrers(grp):
-				pprint.pprint(r)
+			#print(sys.getrefcount(grp))
+			#for r in gc.get_referrers(grp):
+			#	pprint.pprint(r)
 	
 		
 		
