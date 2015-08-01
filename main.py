@@ -72,12 +72,12 @@ class apps_entry:
   self.ico_size = parent.ico_size
   self.name = de.getName().lower()
   self.generic_name = de.getGenericName().lower()
-  #print(self.generic_name)
-  #print(de.getExec())
+ # print("XX1"+self.generic_name)
+  #print("XX e:"+de.getExec()+" g:"+self.generic_name+" i:"+de.getIcon()+" n:"+self.name)
   self.comment = de.getComment().lower()
   self.exe = re.sub(u"%\w*", u"", de.getExec())
   #print(self.exe)
-  self.icon_name = de.getIcon()
+  self.icon_name = de.getIcon().lower()
   self.icon = self._find_icon(de.getIcon(),self.ico_size)
 
   self.icon_offset_y = (parent.item_size_y-self.ico_size)/2
@@ -90,8 +90,8 @@ class apps_entry:
 
   self.text = Clutter.Text.new_full(font_dash, de.getName(), color_apps)
   self.text.set_width(self.icon_offset_x - self.icon_offset_y)
-  #self.text.set_ellipsize(Pango.EllipsizeMode.END)
-  self.text.set_line_alignment(Pango.Alignment.CENTER)
+  self.text.set_ellipsize(Pango.EllipsizeMode.END)
+  self.text.set_line_alignment(Pango.Alignment.LEFT)
   self.rect = ItemMenu()  
   #self.rect = Clutter.Rectangle.new()
   self.rect.set_size(parent.item_size_x,parent.item_size_y)
@@ -115,6 +115,7 @@ class apps_entry:
   self.text_comment_offset_y = self.icon_offset_y+self.text.get_height()+parent.margin
   self.text_comment = Clutter.Text.new_full(font_comment, self.comment, color_comment)
   self.text_comment.set_width(self.icon_offset_x - self.icon_offset_y - self.text_comment_offset_x)
+  self.text_comment.set_height(self.ico_size-self.text_comment_offset_y+self.icon_offset_y)
   self.text_comment.set_line_wrap(True)
 
   self.parent.add_child(self.rect)
@@ -137,8 +138,8 @@ class apps_entry:
  #  self.rect.add_transition("fade_out", self.fade_out_transition)
  # return True
 
- def get_icon(self, size = 48):
-  return self._find_icon(self.icon_name, size)
+ def get_icon(self):
+  return self._find_icon(self.icon_name, self.ico_size)
 
  def _find_icon(self, icon_name, size = 48):
   icon_theme = Gtk.IconTheme.get_default()
@@ -232,11 +233,25 @@ class apps_handler:
     ret.append(de)
    elif p.search(de.generic_name):
     ret.append(de)
-   elif p.search(de.exe):
+   elif p.search(de.icon_name):
     ret.append(de)
    elif p.search(de.comment):
     ret.append(de)
   return ret
+
+ def match_apps(self, patern):
+  print("pattern:"+patern)
+  p = re.compile("^"+patern.lower()+"$")
+  ret = list()
+  for de in self._apps:
+   if p.match(de.icon_name):
+    ret.append(de)
+   elif p.match(de.name):
+    ret.append(de)
+   elif p.match(de.exe):
+    ret.append(de)
+  return ret
+
 
  def hide_all(self):
   for x in self._apps:
@@ -578,10 +593,15 @@ class PanelMenu(SubWindow):
 
 	def event_menu_button_press(widget, event, self,  menu):
 		print('PANEL KEYPRESS')
-		menu['obj'].activate(event.time)
+		if 'cb' in menu:
+			menu['cb'](event.time)
+		else:
+			menu['obj'].activate(event.time)
+		pass
 
 	def event_menu_focus_out(widget, event, self):
 		print('FOCUS OUT')
+		pass
 
 	def show_menu(self, x, y, menulist, event_time):
 		print('SHOW MENU')
@@ -702,22 +722,20 @@ class PanelIcon(Clutter.Group):
 		self.icon_back = ItemMenu()
 		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
 		self.icon_back.set_reactive(True)
+		
 
 		self.icon_back.connect("button-press-event", self.button_press_handler)
-		#Enable animation
-		#self.save_easing_state();
-		#self.set_easing_mode(Clutter.AnimationMode.EASE_IN_OUT_CUBIC);
-		#self.set_easing_duration(100);
+		
+		self.icon.set_position(self.sub_offset,self.sub_offset)
+		self.icon_back.set_position(0,0)
+
 
 		self.add_child(self.icon_back)
 		self.add_child(self.icon)
-
-		
-		
-
-	def set_position(self,x, y):
-		self.icon.set_position(x+self.sub_offset,y+self.sub_offset)
-		self.icon_back.set_position(x,y)
+		#Enable animation
+		self.save_easing_state();
+		self.set_easing_mode(Clutter.AnimationMode.EASE_IN_OUT_CUBIC);
+		self.set_easing_duration(100);
 
 
 class PanelClock(Clutter.Group):
@@ -736,6 +754,7 @@ color_clock)
 
 		self.icon_back = ItemMenu()
 		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
+		self.icon_back.set_position(0,0)
 
 		self.add_child(self.icon_back)
 		self.add_child(self.text)
@@ -743,12 +762,12 @@ color_clock)
 		
 	
 	def set_position(self,x, y):
+		super().set_position(x,y)
 		now = datetime.datetime.now()
 		self.text.set_text(now.strftime('%H:%M'))
 		self.sub_offset_x = (self.icon_size_x-self.text.get_width())/2
 		self.sub_offset_y = (self.icon_size_y-self.text.get_height())/2
-		self.text.set_position(x+self.sub_offset_x,y+self.sub_offset_y)
-		self.icon_back.set_position(x,y)
+		self.text.set_position(self.sub_offset_x,self.sub_offset_y)
 
 
 class PanelApps(PanelIcon):
@@ -772,21 +791,54 @@ class PanelShutdown(PanelIcon):
 			{'text':"Reboot",'obj':Reboot()},
 			]
 
-		self.panel.sub_menu(self.icon_back.get_y(), menu_list, event.time)	
+		self.panel.sub_menu(self.get_y(), menu_list, event.time)	
+
+
+class PanelGroupAppUnlock():
+	def __init__(self, grp):
+		self.grp = grp
+	def activate(self, event_time):
+		self.grp.unlock()
+		pass
+		
+
+class PanelGroupAppLock():
+	def __init__(self, grp):
+		self.grp = grp
+	def activate(self, event_time):
+		self.grp.lock()
+		pass
+
 
 class PanelGroupApp(PanelIcon):
-	def __init__(self, panel, name, icon, ico_size):
-		super().__init__(panel, icon, ico_size, 48)
+	def __init__(self, panel, name, icon, px1_ico, ico_size):
 		self.app_list = {}
 		self.name = name
 		self.locked = False
 
+		self.icon_1px = px1_ico
+		self.icon_1px.set_size(ico_size,ico_size)
+		self.icon_1px.set_opacity(100)
+		self.icon_1px.hide()
+		#self.icon_1px.set_depth(100)
+		
 
+		super().__init__(panel, icon, ico_size, 48)
+		self.insert_child_above(self.icon_1px, self.icon_back)
+		
 		#self.icon_text = Clutter.Text.new_full(font_menu_entry, "", Clutter.Color.new(255,255,255,255))
 		#self.add_child(self.icon_text)
 
+	def lock(self, event_time):
+		self.locked = True
+
+	def unlock(self, event_time):
+		self.locked = False
+
+
 	def set_position(self,x, y):
 		super().set_position(x,y)
+		self.icon_1px.set_position(0,0)
 		#self.icon_text.set_text(str(len(self.app_list)))
 		#self.icon_text.set_position(x+5,y+5)
 		
@@ -807,9 +859,13 @@ class PanelGroupApp(PanelIcon):
 	def add(self, iapp):
 		print("Adding "+str(iapp.get_xid()) +" to "+ self.name)
 		self.app_list[iapp.get_xid()] = iapp
+		self.icon_1px.show()
 
 	def remove(self, iapp):
 		self.app_list.pop(iapp.get_xid())
+		if is_empty():
+			self.icon_1px.hide()
+		
 
 	def is_empty(self):
 		return len(self.app_list) == 0
@@ -832,12 +888,22 @@ class PanelGroupApp(PanelIcon):
 					menu_list.append(menu)
 
 
-				self.panel.sub_menu(self.icon_back.get_y(), menu_list, event.time)	
+				self.panel.sub_menu(self.get_y(), menu_list, event.time)	
 			else:
 				self.panel.sub_reset(event.time)
 				for k,iapp in self.app_list.items():
 					iapp.activate(event.time)
 					break
+
+		elif event.button == 3:
+			menu_list = []
+			if self.locked:
+				menu_list.append({'text':"Unlock", 'cb':self.unlock})
+			else:				
+				menu_list.append({'text':"Lock",'cb':self.lock})
+
+			self.panel.sub_menu(self.get_y(), menu_list, event.time)
+
 
 	def __str__(self):
 		#print(self.icon)
@@ -924,9 +990,10 @@ class PanelView(Clutter.Stage):
 		return True
 
 	def find_ico(self, name):
-		ret = self.dash_slide.apps.filter_apps(name)
+		ret = self.dash_slide.apps.match_apps(name)
 		if ret:
-			return ret[0].get_icon(self.ico_size)
+			print(ret[0].name)
+			return ret[0].get_icon()
 		else:
 			return None
 
@@ -951,7 +1018,15 @@ class PanelView(Clutter.Stage):
 				#print(app.get_xid())
 				xid = app.get_xid()
 				name = app.get_name()
-				group_name = app.get_application().get_name()
+				group_name = app.get_class_group_name()
+				#dir(app)	
+				#print('---')
+				#print(app.get_icon_name())
+				#print(app.get_application().get_name())
+				#print(app.get_application().get_pid())
+				#print(app.get_class_group_name())
+				#print(app.get_class_instance_name())
+				#print(group_name)
 
 				# Check if app is already in list
 				if xid in self.dict_apps:
@@ -969,12 +1044,12 @@ class PanelView(Clutter.Stage):
 					if grp == None:
 						#print(app.get_icon().get_width())
 						# Get icon path
-						ico = self.find_ico(app.get_application().get_icon_name())
-						if ico==None:
-							ico = self.find_ico(app.get_application().get_name())
+						ico = self.find_ico(group_name)
+						#if ico==None:
+						#	ico = self.find_ico(app.get_application().get_name())
 						if ico==None:
 							pix=app.get_icon()
-							pix= pix.scale_simple(256,256,GdkPixbuf.InterpType.NEAREST)
+							pix= pix.scale_simple(64,64,GdkPixbuf.InterpType.HYPER)
 							ico = Clutter.Texture.new()
 							data = pix.get_pixels()
 							width = pix.get_width ()
@@ -988,8 +1063,16 @@ class PanelView(Clutter.Stage):
 							#ico.set_width(48,48)
 							#ico_data=  pix.get_pixels_array()
 
+						px_pix= app.get_icon().scale_simple(1,1,GdkPixbuf.InterpType.HYPER)
+						px_ico = Clutter.Texture.new()
+						if px_pix.get_has_alpha():
+							px_bpp = 4
+						else:
+							px_bpp = 3
+						px_ico.set_from_rgb_data(px_pix.get_pixels(), px_pix.get_has_alpha(), px_pix.get_width(), px_pix.get_height(), px_pix.get_rowstride(), px_bpp,0 );
+
 						#print('Create new group:' + str(group_name))
-						grp = PanelGroupApp(self,group_name,ico,self.ico_size)
+						grp = PanelGroupApp(self,group_name,ico, px_ico,self.ico_size)
 						
 						#print(sys.getrefcount(grp))
 						self.rect.add_child(grp)
@@ -1069,9 +1152,9 @@ class PanelView(Clutter.Stage):
 			#self.dash_slide.show(event.time)
 			#self.panel_menu.hide_menu()
 
-		elif event.button == 3:
-			Clutter.main_quit()
-
+		#elif event.button == 3:
+			#Clutter.main_quit()
+			
 	def run(self):
 		self.show()
 		self.window.move(0,0)
