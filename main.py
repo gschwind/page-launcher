@@ -43,7 +43,7 @@ import subprocess
 
 
 font_comment = "Sans 8"
-color_comment = Clutter.Color.new(128,128,128,255)
+color_comment = Clutter.Color.new(200,200,200,255)
 
 font_dash = "Sans Bold 12"
 color_apps = Clutter.Color.new(255,255,255,255)
@@ -269,7 +269,7 @@ class launcher_layout:
    self.columns = int(floor(self.width/(self.size_x)))
    self.rows = int(floor(self.height/(self.size_y)))
    #self.left_margin = (self.width-(self.columns*self.size*1.5*1.3))/2.0
-   #self.top_margin = (self.height-(self.rows*self.size*1.5*1.3))/2.0
+   self.top_margin = (self.height-(self.rows*self.size_y))
    #npages = int(floor(napps/self.columns*self.rows)+1.0)
  pass
 
@@ -412,8 +412,10 @@ class DashSlide(Slide):
 		self.slide_size = 300
 		super().__init__(parent, offset_x, self.slide_size)
 
+		self.margin_x = 10
+		self.text_size = 64
 		self.margin = 2
-		self.y_offset = 32
+		self.y_offset = self.text_size + self.margin
 		self.item_size_x = self.slide_size
 		self.item_size_y = 64
 		self.ico_size = 48
@@ -434,8 +436,6 @@ class DashSlide(Slide):
 		self.pos = 200
 
 		#init slide 
-		self.margin_x = 10
-		self.text_size = 64
 		self.back_text = ItemMenu()
 		self.back_text.set_x(0)
 		self.back_text.set_y(self.root_height-self.text_size)
@@ -530,7 +530,7 @@ Clutter.Color.new(255,255,255,128))
 			c = i - floor(i / layout.columns)*layout.columns
 			l = floor(i / layout.columns)
 			a = self.apps_list[i]
-			a.set_position(c*layout.size_x,l*layout.size_y+self.margin)
+			a.set_position(c*layout.size_x,(layout.rows-l-1)*layout.size_y+self.margin+layout.top_margin)
 			a.show()
 			self.current_actor.append(a)
 		pass
@@ -597,6 +597,7 @@ class PanelMenu(SubWindow):
 			menu['cb'](event.time)
 		else:
 			menu['obj'].activate(event.time)
+		self.hide_menu()
 		pass
 
 	def event_menu_focus_out(widget, event, self):
@@ -787,6 +788,7 @@ class PanelShutdown(PanelIcon):
 		menu_list = [
 			{'text':"Shutdown",'obj':Shutdown()},
 			{'text':"Log Out",'obj':Logout()},
+			{'text':"Lock",'obj':Lock()},
 			{'text':"Sleep",'obj':Sleep()},
 			{'text':"Reboot",'obj':Reboot()},
 			]
@@ -811,7 +813,7 @@ class PanelGroupAppLock():
 
 
 class PanelGroupApp(PanelIcon):
-	def __init__(self, panel, name, icon, px1_ico, ico_size):
+	def __init__(self, panel, name, icon, px1_ico, ico_size, new_process):
 		self.app_list = {}
 		self.name = name
 		self.locked = False
@@ -820,6 +822,7 @@ class PanelGroupApp(PanelIcon):
 		self.icon_1px.set_size(ico_size,ico_size)
 		self.icon_1px.set_opacity(100)
 		self.icon_1px.hide()
+		self.cb_new_process = new_process
 		#self.icon_1px.set_depth(100)
 		
 
@@ -835,6 +838,8 @@ class PanelGroupApp(PanelIcon):
 	def unlock(self, event_time):
 		self.locked = False
 
+	def new_process(self, event_time):
+		self.cb_new_process()
 
 	def set_position(self,x, y):
 		super().set_position(x,y)
@@ -863,7 +868,7 @@ class PanelGroupApp(PanelIcon):
 
 	def remove(self, iapp):
 		self.app_list.pop(iapp.get_xid())
-		if is_empty():
+		if self.is_empty():
 			self.icon_1px.hide()
 		
 
@@ -902,6 +907,7 @@ class PanelGroupApp(PanelIcon):
 			else:				
 				menu_list.append({'text':"Lock",'cb':self.lock})
 
+			menu_list.append({'text':"New Instance",'cb':self.new_process})
 			self.panel.sub_menu(self.get_y(), menu_list, event.time)
 
 
@@ -989,11 +995,11 @@ class PanelView(Clutter.Stage):
 		self.update_current_apps()
 		return True
 
-	def find_ico(self, name):
+	def find_app(self, name):
 		ret = self.dash_slide.apps.match_apps(name)
 		if ret:
-			print(ret[0].name)
-			return ret[0].get_icon()
+			#print(ret[0].name)
+			return ret[0]
 		else:
 			return None
 
@@ -1044,7 +1050,13 @@ class PanelView(Clutter.Stage):
 					if grp == None:
 						#print(app.get_icon().get_width())
 						# Get icon path
-						ico = self.find_ico(group_name)
+						appdict = self.find_app(group_name);
+						if appdict:
+							cb_new_process = appdict.call
+							ico = appdict.get_icon()
+						else:
+							ico = None
+							cb_new_process = None
 						#if ico==None:
 						#	ico = self.find_ico(app.get_application().get_name())
 						if ico==None:
@@ -1072,7 +1084,7 @@ class PanelView(Clutter.Stage):
 						px_ico.set_from_rgb_data(px_pix.get_pixels(), px_pix.get_has_alpha(), px_pix.get_width(), px_pix.get_height(), px_pix.get_rowstride(), px_bpp,0 );
 
 						#print('Create new group:' + str(group_name))
-						grp = PanelGroupApp(self,group_name,ico, px_ico,self.ico_size)
+						grp = PanelGroupApp(self,group_name,ico, px_ico,self.ico_size, cb_new_process)
 						
 						#print(sys.getrefcount(grp))
 						self.rect.add_child(grp)
@@ -1199,6 +1211,11 @@ class PanelView(Clutter.Stage):
 		self.panel_menu.window.focus(event_time)
 #####
 ####
+
+def dbus_mate(bus):
+	bus_object = bus.get_object("org.mate.sessionmanager", "/org/mate/SessionManager")
+	iface = dbus.Interface(bus_object, 'org.mate.SessionManager')
+	return iface
 def dbus_login1(bus):
 	bus_object = bus.get_object("org.freedesktop.login1", "/org/freedesktop/login1")
 	iface = dbus.Interface(bus_object, 'org.freedesktop.login1.Manager')
@@ -1282,11 +1299,21 @@ class Logout():
 	def activate(self, event_time):
 		bus = dbus.SystemBus()
 		try:
+			i= dbus_mate(bus)
+			print("lock")
+			i.Logout(1)
+		except:
+			raise Exception("logout somehow doesn't work.")
+
+class Lock():
+	def activate(self, event_time):
+		bus = dbus.SystemBus()
+		try:
 			i= dbus_lightdm(bus)
 			print("switch")
 			i.SwitchToGreeter(0)
 		except:
-			raise Exception("logout somehow doesn't work.")
+			raise Exception("lock somehow doesn't work.")
 
 if __name__ == '__main__':
  Gdk.init(sys.argv)
