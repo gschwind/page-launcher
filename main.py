@@ -13,6 +13,8 @@ import time
 import gc # debug
 import pprint # debug 
 
+import configparser #Save Config
+
 from math import *
 
 from io import StringIO
@@ -118,10 +120,10 @@ class apps_entry:
   self.text_comment.set_height(self.ico_size-self.text_comment_offset_y+self.icon_offset_y)
   self.text_comment.set_line_wrap(True)
 
-  self.parent.add_child(self.rect)
-  self.parent.add_child(self.icon)
-  self.parent.add_child(self.text)
-  self.parent.add_child(self.text_comment)
+  self.parent.rect.add_child(self.rect)
+  self.parent.rect.add_child(self.icon)
+  self.parent.rect.add_child(self.text)
+  self.parent.rect.add_child(self.text_comment)
   self.hide()
   pass
 
@@ -415,7 +417,7 @@ class DashSlide(Slide):
 		self.margin_x = 10
 		self.text_size = 64
 		self.margin = 2
-		self.y_offset = self.text_size + self.margin
+		self.y_offset = self.text_size + 2*self.margin
 		self.item_size_x = self.slide_size
 		self.item_size_y = 64
 		self.ico_size = 48
@@ -438,7 +440,7 @@ class DashSlide(Slide):
 		#init slide 
 		self.back_text = ItemMenu()
 		self.back_text.set_x(0)
-		self.back_text.set_y(self.root_height-self.text_size)
+		self.back_text.set_y(self.root_height-self.text_size-self.margin)
 		self.back_text.set_size(self.slide_size, self.text_size)
 
 		self.intext = Clutter.Text.new_full(font_entry, u"", color_entry)
@@ -452,19 +454,19 @@ Clutter.Color.new(255,255,255,128))
 		self.text_offset = (self.text_size-self.notext.get_height())/2
 
 		self.notext.set_x(self.margin_x)
-		self.notext.set_y(self.root_height-self.text_size + self.text_offset)
+		self.notext.set_y(self.root_height-self.text_size + self.text_offset-self.margin)
 		self.notext.set_width(self.slide_size-self.margin_x*2)
 
 		self.intext.set_x(self.margin_x)
-		self.intext.set_y(self.root_height-self.text_size + self.text_offset)
+		self.intext.set_y(self.root_height-self.text_size + self.text_offset-self.margin)
 		self.intext.set_width(self.slide_size-self.margin_x*2)		
 
 		self.notext.show()
 		self.intext.show()
 
-		self.add_child(self.notext)
-		self.add_child(self.intext)
-		self.add_child(self.back_text)
+		self.rect.add_child(self.notext)
+		self.rect.add_child(self.intext)
+		self.rect.add_child(self.back_text)
 
 		self.apps.hide_all()
 		self.set_key_focus(self.intext)
@@ -674,10 +676,11 @@ class PanelMenu(SubWindow):
 
 
 class PanelApp():
-	def __init__(self, xid, name, group):
+	def __init__(self, xid, name, group ,pid):
 		self.xid = xid
 		self.updated = 0
 		self.name = name
+		self.pid = pid
 		self.group_name = group.get_name()
 		self.group = group
 		# Add app to group
@@ -698,7 +701,14 @@ class PanelApp():
 
 	def is_updated(self, update):
 		return update == self.updated
+
+	def kill(self):
+		os.kill(int(self.pid), signal.SIGTERM)
 	
+
+	def set_name(self, name):
+		self.name = name
+
 	def get_xid(self):
 		return self.xid
 	def get_name(self):
@@ -796,54 +806,51 @@ class PanelShutdown(PanelIcon):
 		self.panel.sub_menu(self.get_y(), menu_list, event.time)	
 
 
-class PanelGroupAppUnlock():
-	def __init__(self, grp):
-		self.grp = grp
-	def activate(self, event_time):
-		self.grp.unlock()
-		pass
-		
-
-class PanelGroupAppLock():
-	def __init__(self, grp):
-		self.grp = grp
-	def activate(self, event_time):
-		self.grp.lock()
-		pass
-
 
 class PanelGroupApp(PanelIcon):
-	def __init__(self, panel, name, icon, px1_ico, ico_size, new_process):
+	def __init__(self, panel, name, icon, ico_size, new_process, locked):
 		self.app_list = {}
 		self.name = name
-		self.locked = False
-
-		self.icon_1px = px1_ico
-		self.icon_1px.set_size(ico_size,ico_size)
-		self.icon_1px.set_opacity(100)
-		self.icon_1px.hide()
+		self.locked = locked
+		self.icon_1px = None
 		self.cb_new_process = new_process
 		#self.icon_1px.set_depth(100)
 		
 
 		super().__init__(panel, icon, ico_size, 48)
-		self.insert_child_above(self.icon_1px, self.icon_back)
 		
 		#self.icon_text = Clutter.Text.new_full(font_menu_entry, "", Clutter.Color.new(255,255,255,255))
 		#self.add_child(self.icon_text)
 
+	def set_background(self, px1_ico):
+		self.icon_1px = px1_ico
+		self.icon_1px.set_size(self.icon_size_x,self.icon_size_x)
+		self.icon_1px.set_opacity(100)
+		self.icon_1px.hide()
+		self.insert_child_above(self.icon_1px, self.icon_back)
+
+	def get_background(self):
+		return self.icon_1px
+
 	def lock(self, event_time):
-		self.locked = True
+		if self.cb_new_process:
+			self.locked = True
+		self.panel.config_save()
 
 	def unlock(self, event_time):
 		self.locked = False
 
-	def new_process(self, event_time):
+	def process_new(self, event_time):
 		self.cb_new_process()
+	def process_close(self, event_time):
+		for k,iapp in self.app_list.items():
+			iapp.kill()
+
 
 	def set_position(self,x, y):
 		super().set_position(x,y)
-		self.icon_1px.set_position(0,0)
+		if self.icon_1px:
+			self.icon_1px.set_position(0,0)
 		#self.icon_text.set_text(str(len(self.app_list)))
 		#self.icon_text.set_position(x+5,y+5)
 		
@@ -864,12 +871,14 @@ class PanelGroupApp(PanelIcon):
 	def add(self, iapp):
 		print("Adding "+str(iapp.get_xid()) +" to "+ self.name)
 		self.app_list[iapp.get_xid()] = iapp
-		self.icon_1px.show()
+		if self.icon_1px:
+			self.icon_1px.show()
 
 	def remove(self, iapp):
 		self.app_list.pop(iapp.get_xid())
 		if self.is_empty():
-			self.icon_1px.hide()
+			if self.icon_1px:
+				self.icon_1px.hide()
 		
 
 	def is_empty(self):
@@ -894,11 +903,13 @@ class PanelGroupApp(PanelIcon):
 
 
 				self.panel.sub_menu(self.get_y(), menu_list, event.time)	
-			else:
+			elif len(self.app_list) == 1:
 				self.panel.sub_reset(event.time)
 				for k,iapp in self.app_list.items():
 					iapp.activate(event.time)
 					break
+			else:
+				self.process_new(event.time)
 
 		elif event.button == 3:
 			menu_list = []
@@ -907,7 +918,10 @@ class PanelGroupApp(PanelIcon):
 			else:				
 				menu_list.append({'text':"Lock",'cb':self.lock})
 
-			menu_list.append({'text':"New Instance",'cb':self.new_process})
+			menu_list.append({'text':"New Instance",'cb':self.process_new})
+			if len(self.app_list) >= 1:
+				menu_list.append({'text':"Terminate",'cb':self.process_close})
+				
 			self.panel.sub_menu(self.get_y(), menu_list, event.time)
 
 
@@ -985,12 +999,39 @@ class PanelView(Clutter.Stage):
 			self.rect.add_child(app)
 
 		self.wnck_screen = Wnck.Screen.get_default()
+
+	
+		self.config_file =os.path.join(os.path.expanduser("~"),'.page-launcher.config')
+	
+	
+		self.config_read()
 		self.update_current_apps()
 		self.show()
 
 		GObject.timeout_add(1000, self.refresh_timer, self)		
 
-	
+	def config_save(self):
+		config = configparser.ConfigParser()
+		config.add_section('Launcher')
+		apps_locked_list = []
+		for group in self.list_group_apps:
+			if group.is_locked():
+				apps_locked_list.append(group.get_name())
+
+		config.set('Launcher','apps' , ','.join(apps_locked_list))
+		# Writing our configuration file to 'example.cfg'
+		with open(self.config_file, 'w') as configfile:
+			config.write(configfile)
+
+	def config_read(self):
+		config = configparser.ConfigParser()
+		config.read(self.config_file)
+		apps_locked_list = config.get('Launcher','apps').split(',')
+		for group_name in apps_locked_list:
+			self.create_app(group_name, None, True)
+			
+			
+
 	def refresh_timer(self, *arg):
 		self.update_current_apps()
 		return True
@@ -1002,6 +1043,47 @@ class PanelView(Clutter.Stage):
 			return ret[0]
 		else:
 			return None
+
+	def create_app(self, group_name, pix_icon, locked):
+		#print(app.get_icon().get_width())
+		# Get icon path
+		appdict = self.find_app(group_name);
+		if appdict:
+			cb_new_process = appdict.call
+			ico = appdict.get_icon()
+		else:
+			ico = None
+			cb_new_process = None
+		#if ico==None:
+		#	ico = self.find_ico(app.get_application().get_name())
+		if ico==None and pix_icon:
+			pix= pix_icon.scale_simple(64,64,GdkPixbuf.InterpType.HYPER)
+			ico = Clutter.Texture.new()
+			data = pix.get_pixels()
+			width = pix.get_width ()
+			height = pix.get_height()
+			if pix.get_has_alpha():
+				bpp = 4
+			else:
+				bpp = 3
+			rowstride = pix.get_rowstride()
+			ico.set_from_rgb_data(data, pix.get_has_alpha(), width, height, rowstride, bpp,0 );
+			#ico.set_width(48,48)
+			#ico_data=  pix.get_pixels_array()
+		assert(ico != None)
+	
+
+		#print('Create new group:' + str(group_name))
+		grp = PanelGroupApp(self,group_name,ico,self.ico_size, cb_new_process, locked)
+		
+		#print(sys.getrefcount(grp))
+		self.rect.add_child(grp)
+		#print(sys.getrefcount(grp))
+		self.list_group_apps.append(grp)
+		#print(sys.getrefcount(grp))
+
+		return grp
+
 
 	def update_current_apps(self):	
 		self.wnck_screen.force_update()
@@ -1037,66 +1119,36 @@ class PanelView(Clutter.Stage):
 				# Check if app is already in list
 				if xid in self.dict_apps:
 					iapp = self.dict_apps[xid]
+					iapp.set_name(app.get_name())
 				# New app
 				else:
 					print('Create new app:' + str(xid) + "(" + group_name + ")")
-					# Create group if does not exist
+					# Check group if it does exist
 					grp = None
 					for group in self.list_group_apps:
 						if group_name == group.get_name():
 							grp = group
 							break
-
+					# Create group
 					if grp == None:
-						#print(app.get_icon().get_width())
-						# Get icon path
-						appdict = self.find_app(group_name);
-						if appdict:
-							cb_new_process = appdict.call
-							ico = appdict.get_icon()
-						else:
-							ico = None
-							cb_new_process = None
-						#if ico==None:
-						#	ico = self.find_ico(app.get_application().get_name())
-						if ico==None:
-							pix=app.get_icon()
-							pix= pix.scale_simple(64,64,GdkPixbuf.InterpType.HYPER)
-							ico = Clutter.Texture.new()
-							data = pix.get_pixels()
-							width = pix.get_width ()
-							height = pix.get_height()
-							if pix.get_has_alpha():
-								bpp = 4
-							else:
-								bpp = 3
-							rowstride = pix.get_rowstride()
-							ico.set_from_rgb_data(data, pix.get_has_alpha(), width, height, rowstride, bpp,0 );
-							#ico.set_width(48,48)
-							#ico_data=  pix.get_pixels_array()
-
-						px_pix= app.get_icon().scale_simple(1,1,GdkPixbuf.InterpType.HYPER)
+						grp = self.create_app(group_name, app.get_icon(), False)
+					# Update background if needed
+					if grp.get_background() == None:
 						px_ico = Clutter.Texture.new()
+						px_pix= app.get_icon().scale_simple(1,1,GdkPixbuf.InterpType.HYPER)
 						if px_pix.get_has_alpha():
 							px_bpp = 4
 						else:
 							px_bpp = 3
 						px_ico.set_from_rgb_data(px_pix.get_pixels(), px_pix.get_has_alpha(), px_pix.get_width(), px_pix.get_height(), px_pix.get_rowstride(), px_bpp,0 );
+						grp.set_background(px_ico)
 
-						#print('Create new group:' + str(group_name))
-						grp = PanelGroupApp(self,group_name,ico, px_ico,self.ico_size, cb_new_process)
-						
-						#print(sys.getrefcount(grp))
-						self.rect.add_child(grp)
-						#print(sys.getrefcount(grp))
-						self.list_group_apps.append(grp)
-						#print(sys.getrefcount(grp))
-	
 					# Append app to dict
 					#print(sys.getrefcount(grp))					
-					iapp=PanelApp(xid, name, grp)
+					iapp=PanelApp(xid=xid, name=name, group=grp, pid=app.get_application().get_pid())
 					#print(sys.getrefcount(grp))
 					self.dict_apps[xid] = iapp
+				
 				
 				
 				iapp.update(self.update_cnt)
@@ -1148,7 +1200,7 @@ class PanelView(Clutter.Stage):
 			pos_y += self.ico_size+self.margin
 
 		# Update icon position
-		pos_y = self.get_height()
+		pos_y = self.get_height()-self.margin
 		for grp in self.list_sys_apps:
 			pos_y -= grp.icon_size_y+self.margin
 			print(pos_y)			
