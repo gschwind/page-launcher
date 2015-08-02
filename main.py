@@ -1001,7 +1001,7 @@ class PanelView(Clutter.Stage):
 		self.wnck_screen = Wnck.Screen.get_default()
 
 	
-		self.config_file =os.path.join(os.path.expanduser("~"),'.page-launcher.config')
+		self.config_file =os.path.join(os.path.expanduser("~"),'.page-launcher.cfg')
 	
 	
 		self.config_read()
@@ -1026,9 +1026,10 @@ class PanelView(Clutter.Stage):
 	def config_read(self):
 		config = configparser.ConfigParser()
 		config.read(self.config_file)
-		apps_locked_list = config.get('Launcher','apps').split(',')
-		for group_name in apps_locked_list:
-			self.create_app(group_name, None, True)
+		if config.has_section('Launcher'):
+			apps_locked_list = config.get('Launcher','apps').split(',')
+			for group_name in apps_locked_list:
+				self.create_app(group_name, None, True)
 			
 			
 
