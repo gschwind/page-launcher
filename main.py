@@ -890,8 +890,8 @@ class PanelGroupApp(PanelIcon):
 	def get_name(self):
 		return self.name
 
-
 	def button_press_handler(self, widget, event):
+		print('PanelGroupApp.button_press_handler', event)
 		if event.button == 1:
 			if len(self.app_list) > 1:
 				menu_list = []
@@ -900,17 +900,15 @@ class PanelGroupApp(PanelIcon):
 					menu['text'] = iapp.get_name()
 					menu['obj'] = iapp
 					menu_list.append(menu)
-
-
 				self.panel.sub_menu(self.get_y(), menu_list, event.time)	
 			elif len(self.app_list) == 1:
 				self.panel.sub_reset(event.time)
 				for k,iapp in self.app_list.items():
 					iapp.activate(event.time)
-					break
+					return True
 			else:
 				self.process_new(event.time)
-
+				return True
 		elif event.button == 3:
 			menu_list = []
 			if self.locked:
@@ -923,6 +921,8 @@ class PanelGroupApp(PanelIcon):
 				menu_list.append({'text':"Terminate",'cb':self.process_close})
 				
 			self.panel.sub_menu(self.get_y(), menu_list, event.time)
+			return True
+		return False
 
 
 	def __str__(self):
@@ -1190,9 +1190,9 @@ class PanelView(Clutter.Stage):
 	
 		
 		
-		print('=====')
-		for grp in self.list_group_apps:
-			print(grp)
+		#print('=====')
+		#for grp in self.list_group_apps:
+		#	print(grp)
 
 		# Update icon position
 		pos_y = self.pos_offset
@@ -1204,21 +1204,24 @@ class PanelView(Clutter.Stage):
 		pos_y = self.get_height()-self.margin
 		for grp in self.list_sys_apps:
 			pos_y -= grp.icon_size_y+self.margin
-			print(pos_y)			
+			#print(pos_y)			
 			grp.set_position(self.margin, pos_y+self.margin)
 			
 
-	def button_press_handler(widget, event, self):
+	def button_press_handler(self, event, data = None):
+		print('PanelView.button_press_handler', event)
 		if event.button == 1:
-			print ('pouet')
+			#print ('pouet')
 			#self.panel_menu.hide_menu()
 			#self.dash.show(event.time)
 			#self.dash.window.focus(event.time)
 			#self.dash_slide.show(event.time)
 			#self.panel_menu.hide_menu()
-
-		#elif event.button == 3:
+			pass
+		elif event.button == 3:
 			#Clutter.main_quit()
+			pass
+		pass
 			
 	def run(self):
 		self.show()
@@ -1259,9 +1262,17 @@ class PanelView(Clutter.Stage):
 		self.panel_menu.hide_menu()
 
 	def sub_menu(self, offset_y, menu_list, event_time):
+		self.raise_window(event_time)
 		self.dash_slide.hide()
 		self.panel_menu.show_menu(self.panel_width, offset_y, menu_list, event_time)	
 		self.panel_menu.window.focus(event_time)
+
+	def raise_window(self, time):
+		self.window.show()
+		w = Wnck.Window.get(self.window.get_xid())
+		if w != None:
+			w.activate(time)
+
 #####
 ####
 
