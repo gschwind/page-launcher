@@ -399,7 +399,7 @@ class Slide(SubWindow):
 
 
 	def show(self, event_time):
-		print("Dash show")
+		print("Slide.show: Dash show")
 		parent_window = ClutterGdk.get_stage_window(self.parent)
 		self.window.set_transient_for(parent_window)
 		self.reset()
@@ -607,7 +607,7 @@ class PanelMenu(SubWindow):
 		pass
 
 	def show_menu(self, x, y, menulist, event_time):
-		print('SHOW MENU')
+		print('PanelMenu.show_menu: SHOW MENU')
 		self.set_x(0)
 		self.set_y(0)
 		#self.rect.remove_all_children()
@@ -671,6 +671,7 @@ class PanelMenu(SubWindow):
 		pass
 
 	def hide_menu(self):
+		print('PanelMenu.hide_menu')
 		self.hide()
 		self.remove_all()
 
@@ -788,6 +789,7 @@ class PanelApps(PanelIcon):
 	
 	def button_press_handler(self, widget, event):
 		self.panel.sub_dash(event.time)
+		return True
 
 class PanelShutdown(PanelIcon):
 	def __init__(self, panel, ico_size):
@@ -803,7 +805,8 @@ class PanelShutdown(PanelIcon):
 			{'text':"Reboot",'obj':Reboot()},
 			]
 
-		self.panel.sub_menu(self.get_y(), menu_list, event.time)	
+		self.panel.sub_menu(self.get_y(), menu_list, event.time)
+		return True
 
 
 
@@ -900,7 +903,8 @@ class PanelGroupApp(PanelIcon):
 					menu['text'] = iapp.get_name()
 					menu['obj'] = iapp
 					menu_list.append(menu)
-				self.panel.sub_menu(self.get_y(), menu_list, event.time)	
+				self.panel.sub_menu(self.get_y(), menu_list, event.time)
+				return True
 			elif len(self.app_list) == 1:
 				self.panel.sub_reset(event.time)
 				for k,iapp in self.app_list.items():
@@ -1210,6 +1214,11 @@ class PanelView(Clutter.Stage):
 
 	def button_press_handler(self, event, data = None):
 		print('PanelView.button_press_handler', event)
+		
+		# hide all sub windows on panel click if
+		# no action happenned
+		self.sub_reset()
+
 		if event.button == 1:
 			#print ('pouet')
 			#self.panel_menu.hide_menu()
@@ -1221,7 +1230,7 @@ class PanelView(Clutter.Stage):
 		elif event.button == 3:
 			#Clutter.main_quit()
 			pass
-		pass
+		return False
 			
 	def run(self):
 		self.show()
