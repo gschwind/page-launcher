@@ -1215,10 +1215,6 @@ class PanelView(Clutter.Stage):
 	def button_press_handler(self, event, data = None):
 		print('PanelView.button_press_handler', event)
 		
-		# hide all sub windows on panel click if
-		# no action happenned
-		self.sub_reset()
-
 		if event.button == 1:
 			#print ('pouet')
 			#self.panel_menu.hide_menu()
@@ -1228,9 +1224,18 @@ class PanelView(Clutter.Stage):
 			#self.panel_menu.hide_menu()
 			pass
 		elif event.button == 3:
-			#Clutter.main_quit()
+			self.sub_menu(event.y, [{'text':'Quit launcher','cb': self.main_quit }] , event.time)
+			return True
 			pass
+
+		# hide all sub windows on panel click if
+		# no action happenned
+		self.sub_reset()
+
 		return False
+
+	def main_quit(self, time):
+		Clutter.main_quit()
 			
 	def run(self):
 		self.show()
