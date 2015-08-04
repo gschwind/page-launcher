@@ -1,0 +1,11 @@
+Source: page-launcher
+Maintainer: Johann Baudy <johaahn@gnu-log.net>
+Section: python
+Priority: optional
+Build-Depends:debhelper (>= 7.4.3)
+Standards-Version: 3.9.1
+
+Package: page-launcher
+Architecture: all
+Depends: python, python-dbus
+Description: Page Launcher - App launcher for page WM
