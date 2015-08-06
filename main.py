@@ -942,6 +942,9 @@ class PanelGroupApp(PanelIcon):
 
 
 class PanelView(Clutter.Stage):
+	def toto(self):
+		print("toto")
+
 	def __init__(self):
 		super().__init__()
 
@@ -956,6 +959,24 @@ class PanelView(Clutter.Stage):
 		root_height = display.get_default_screen().get_root_window().get_height()
 		
 		screen = Wnck.Screen.get_default()
+
+		#
+		#display = Gdk.screen_get_display (screen)
+		selection_atom_name = "_NET_SYSTEM_TRAY_S%d"%screen.get_number()
+		selection_atom = Gdk.atom_intern(selection_atom_name, False);
+		timestamp = GdkX11.x11_get_server_time(self.window)
+		toto = Gdk.selection_owner_get_for_display(display, selection_atom)
+		#print(toto)
+		res = Gdk.selection_owner_set_for_display (display,
+                                           self.window,
+                                           selection_atom,
+                                           timestamp,
+                                           True)
+		if not res:
+			print("Unable to set sytray !!")
+		#else:
+			#self.window.add_filter(self.toto)
+
 		screen.connect("active-window-changed", self.on_active_window_change)
 		# tricks to create the window
 		ClutterGdk.set_stage_foreign(self, self.window)
