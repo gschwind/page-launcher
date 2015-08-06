@@ -955,8 +955,11 @@ class PanelGroupApp(PanelIcon):
 		return tmp
 
 class PanelView(Clutter.Stage):
-	def toto(self):
+	def toto(self,a):
 		print("toto")
+		print(a.type)
+		return NULL
+		#print(b)
 
 	def __init__(self):
 		super().__init__()
@@ -986,7 +989,8 @@ class PanelView(Clutter.Stage):
                                            True)
 		if not res:
 			print("Unable to set sytray !!")
-		#else:
+		else:
+			PageLauncherHook.gdk_add_filter(self.window, self.toto)
 			#self.window.add_filter(self.toto)
 
 

@@ -100,37 +100,27 @@ static PyObject * py_set_strut(PyObject * self, PyObject * args) {
 	Py_RETURN_NONE;
 }
 
-static PyObject * g_func;
-
 static GdkFilterReturn call_python_filter (GdkXEvent *xevent, GdkEvent *event, gpointer data) {
+	int retval;
+  	PyGILState_STATE gstate;
+	gstate = PyGILState_Ensure();
 
-	printf("my filter ! %p\n", data);
 	PyObject * func = (PyObject*)data;
-
-	PyObject_Print(g_func, stdout, 0);
-	printf("\n");
-
-	//PyGObject * pyg_event = pyg_pointer_new(GDK_TYPE_EVENT, event);
-	// Segfault PyGObject * pyg_event = pygobject_new(event);
-	//PyGObject * pyg_event = pyg_boxed_new(GDK_TYPE_EVENT, event, FALSE, FALSE);
-	PyObject* args = Py_BuildValue("(i,i)",20,30);
-	PyObject* result = PyObject_CallObject(g_func, args);
+	PyObject *py_event = pyg_boxed_new(GDK_TYPE_EVENT, event, FALSE, FALSE);
+	PyObject* args = Py_BuildValue("(O)",py_event);	
+ 	PyObject* result = PyObject_CallObject(func, args);
 	Py_DECREF(args);
-	if (result != NULL) {
-		PyObject_Print(result, stdout, 0);
-		Py_DECREF(result);
-	} else {
-		printf("error\n");
+	Py_DECREF(py_event);
+   
+	if (result == NULL) {
 		PyErr_Print();
-		PyErr_Clear();
+		retval = GDK_FILTER_CONTINUE;
+	} else {
+		retval = PyLong_AsLong(result);
 	}
 
-
-	//Py_DecRef(args);
-	printf("end\n");
-	/* TODO */
-	return GDK_FILTER_CONTINUE;
-
+   	 PyGILState_Release(gstate);
+	return retval;
 }
 
 static PyObject * py_gdk_add_filter(PyObject * self, PyObject * args) {
@@ -145,31 +135,10 @@ static PyObject * py_gdk_add_filter(PyObject * self, PyObject * args) {
         return NULL;
     }
 
-	if(pygobject_check(pyobj, pygobject_lookup_class(GDK_TYPE_WINDOW)) && PyCallable_Check(func)) {
+	if(pygobject_check(pyobj, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
 		GdkWindow * window = GDK_WINDOW(pygobject_get(pyobj));
 		Py_INCREF(func);
-		Py_INCREF(func);
-		Py_INCREF(func);
-		Py_INCREF(func);
-		Py_INCREF(func);
-		Py_INCREF(func);
-		Py_INCREF(func);
-
 		printf("YYYY %d\n", ((PyObject*)(func))->ob_refcnt);
-
-
-//		PyObject_Print(func, stdout, 0);
-//		printf("\nXXXX %p\n", func);
-//		PyObject* result = PyObject_CallFunction(func, "i", 10);
-//		printf("return = %p\n", result);
-//		if (result != NULL)
-//			PyObject_Print(result, stdout, 0);
-//		else
-//			return NULL;
-//
-//		Py_DECREF(result);
-
-		g_func = func;
 		gdk_window_add_filter(window, &call_python_filter, (gpointer)func);
 	} else {
 		printf("unknown object\n");
