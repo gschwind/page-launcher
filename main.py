@@ -103,6 +103,7 @@ class apps_entry:
   #self.rect.connect("enter-event", self.enter_handler, self)
   #self.rect.connect("leave-event", self.leave_handler, self)
   self.rect.connect("button-press-event", apps_entry.button_press_handler, self)
+
   #self.fade_in_transition = Clutter.PropertyTransition.new("opacity")
   #self.fade_in_transition.set_duration(100)
   #self.fade_in_transition.set_to(255)
@@ -193,7 +194,7 @@ class apps_entry:
  def button_press_handler(widget, event, self):
   if event.button == Clutter.BUTTON_PRIMARY:
    self.call()
-   self.parent.hide()
+   self.rect.get_parent().hide()
   pass
 
  def call(self):
@@ -501,7 +502,22 @@ Clutter.Color.new(255,255,255,128))
 			return True
 		return False
 
+	def leave_notify(self, widget, event):
+		print("LEAVE")
+
+	def enter_notify(self, widget, event):
+		print("ENTER")
+
+	def key_focus_in(self, event, data = None):
+		print("focus_in #DashView")
+
+	def key_focus_out(self, event, date = None):
+		print("focus_out #DashView")
+
+
 	def button_press_handler(self, widget, event):
+		print("button press")
+		print(event)
 		widget = self.get_actor_at_pos(Clutter.PickMode.ALL, event.x, event.y)
 		if widget == self.intext:
 			self.set_key_focus(self.intext)
@@ -510,7 +526,6 @@ Clutter.Color.new(255,255,255,128))
 			self.hide()
 			return True
 		return False
-
 
 	def handle_text_changed(self, data = None):
 		self.apps.hide_all()
@@ -589,7 +604,6 @@ class PanelMenu(SubWindow):
 		self.global_width = 0
 		self.global_height = 0
 		#self.connect("deactivate", PanelMenu.event_menu_focus_out, self)
-	
 		#elf.container = Clutter.Group()
 			
 
@@ -940,7 +954,6 @@ class PanelGroupApp(PanelIcon):
 			tmp += "\n"
 		return tmp
 
-
 class PanelView(Clutter.Stage):
 	def toto(self):
 		print("toto")
@@ -960,7 +973,6 @@ class PanelView(Clutter.Stage):
 		
 		screen = Wnck.Screen.get_default()
 
-		#
 		#display = Gdk.screen_get_display (screen)
 		selection_atom_name = "_NET_SYSTEM_TRAY_S%d"%screen.get_number()
 		selection_atom = Gdk.atom_intern(selection_atom_name, False);
@@ -976,6 +988,7 @@ class PanelView(Clutter.Stage):
 			print("Unable to set sytray !!")
 		#else:
 			#self.window.add_filter(self.toto)
+
 
 		screen.connect("active-window-changed", self.on_active_window_change)
 		# tricks to create the window
@@ -1244,6 +1257,7 @@ class PanelView(Clutter.Stage):
 			#self.dash_slide.show(event.time)
 			#self.panel_menu.hide_menu()
 			pass
+
 		elif event.button == 3:
 			self.sub_menu(event.y, [{'text':'Quit launcher','cb': self.main_quit }] , event.time)
 			return True
@@ -1281,6 +1295,23 @@ class PanelView(Clutter.Stage):
 		|Gdk.WindowAttributesType.VISUAL
 		|Gdk.WindowAttributesType.X
 		|Gdk.WindowAttributesType.Y)
+		
+	def key_focus_in(self, event, data = None):
+		print("focus_in")
+
+	def key_focus_out(self, event, date = None):
+		print("focus_out")
+		
+	def xxx_activate(self, event, date = None):
+		print("activate #PanelView")
+	
+	def xxx_deactivate(self, event, date = None):
+		print("deactivate #PanelView")
+		
+	def on_active_window_change(self, screen, window):
+		if(self.window.get_xid() != screen.get_active_window().get_xid()):
+			# TODO HIDE ALL
+			self.dash.hide()
 
 	def on_active_window_change(self, screen, window):
 		if(self.window.get_xid() != screen.get_active_window().get_xid()):

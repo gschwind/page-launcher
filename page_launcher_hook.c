@@ -100,6 +100,84 @@ static PyObject * py_set_strut(PyObject * self, PyObject * args) {
 	Py_RETURN_NONE;
 }
 
+static PyObject * g_func;
+
+static GdkFilterReturn call_python_filter (GdkXEvent *xevent, GdkEvent *event, gpointer data) {
+
+	printf("my filter ! %p\n", data);
+	PyObject * func = (PyObject*)data;
+
+	PyObject_Print(g_func, stdout, 0);
+	printf("\n");
+
+	//PyGObject * pyg_event = pyg_pointer_new(GDK_TYPE_EVENT, event);
+	// Segfault PyGObject * pyg_event = pygobject_new(event);
+	//PyGObject * pyg_event = pyg_boxed_new(GDK_TYPE_EVENT, event, FALSE, FALSE);
+	PyObject* args = Py_BuildValue("(i,i)",20,30);
+	PyObject* result = PyObject_CallObject(g_func, args);
+	Py_DECREF(args);
+	if (result != NULL) {
+		PyObject_Print(result, stdout, 0);
+		Py_DECREF(result);
+	} else {
+		printf("error\n");
+		PyErr_Print();
+		PyErr_Clear();
+	}
+
+
+	//Py_DecRef(args);
+	printf("end\n");
+	/* TODO */
+	return GDK_FILTER_CONTINUE;
+
+}
+
+static PyObject * py_gdk_add_filter(PyObject * self, PyObject * args) {
+	PyObject * pyobj; // the GdkWindow
+	PyObject * func; // the function to call
+
+	if (!PyArg_ParseTuple(args, "OO", &pyobj, &func))
+		return NULL;
+
+    if (!PyCallable_Check(func)) {
+        PyErr_SetString(PyExc_TypeError, "parameter must be callable");
+        return NULL;
+    }
+
+	if(pygobject_check(pyobj, pygobject_lookup_class(GDK_TYPE_WINDOW)) && PyCallable_Check(func)) {
+		GdkWindow * window = GDK_WINDOW(pygobject_get(pyobj));
+		Py_INCREF(func);
+		Py_INCREF(func);
+		Py_INCREF(func);
+		Py_INCREF(func);
+		Py_INCREF(func);
+		Py_INCREF(func);
+		Py_INCREF(func);
+
+		printf("YYYY %d\n", ((PyObject*)(func))->ob_refcnt);
+
+
+//		PyObject_Print(func, stdout, 0);
+//		printf("\nXXXX %p\n", func);
+//		PyObject* result = PyObject_CallFunction(func, "i", 10);
+//		printf("return = %p\n", result);
+//		if (result != NULL)
+//			PyObject_Print(result, stdout, 0);
+//		else
+//			return NULL;
+//
+//		Py_DECREF(result);
+
+		g_func = func;
+		gdk_window_add_filter(window, &call_python_filter, (gpointer)func);
+	} else {
+		printf("unknown object\n");
+	}
+
+	Py_RETURN_NONE;
+}
+
 #define TPL_FUNCTION(name) {#name, py_##name, METH_VARARGS, "Not documented"}
 #define TPL_FUNCTION_DOC(name, doc) {#name, py_##name, METH_VARARGS, doc}
 
@@ -108,6 +186,7 @@ static PyMethodDef methods[] =
 	TPL_FUNCTION_DOC(print, "simple print for testing"),
 	TPL_FUNCTION_DOC(print_type, "Print the type of a GObject"),
 	TPL_FUNCTION_DOC(set_strut, "set _NET_WM_STRUT"),
+	TPL_FUNCTION_DOC(gdk_add_filter, "implement gdk_add_filter"),
 	{NULL, NULL, 0, NULL} // sentinel
 };
 

@@ -1,0 +1,3 @@
+main.py usr/lib/page_launcher
+page-launcher usr/bin
+data/* usr/share/page-launcher/data
