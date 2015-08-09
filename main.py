@@ -955,10 +955,10 @@ class PanelGroupApp(PanelIcon):
 		return tmp
 
 class PanelView(Clutter.Stage):
-	def toto(self,a):
+	def tray_filter(self,a):
 		print("toto")
 		print(a.type)
-		return NULL
+		return Gdk.FilterReturn.CONTINUE
 		#print(b)
 
 	def __init__(self):
@@ -979,18 +979,29 @@ class PanelView(Clutter.Stage):
 		#display = Gdk.screen_get_display (screen)
 		selection_atom_name = "_NET_SYSTEM_TRAY_S%d"%screen.get_number()
 		selection_atom = Gdk.atom_intern(selection_atom_name, False);
+
+		self.atom_opcode = GdkX11.x11_atom_to_xatom_for_display(display, Gdk.atom_intern("_NET_SYSTEM_TRAY_OPCODE", False))
+		self.atom_message_data = GdkX11.x11_atom_to_xatom_for_display(display, Gdk.atom_intern("_NET_SYSTEM_TRAY_MESSAGE_DATA", False))
 		timestamp = GdkX11.x11_get_server_time(self.window)
-		toto = Gdk.selection_owner_get_for_display(display, selection_atom)
+		#toto = Gdk.selection_owner_get_for_display(display, selection_atom)
 		#print(toto)
 		res = Gdk.selection_owner_set_for_display (display,
                                            self.window,
                                            selection_atom,
                                            timestamp,
                                            True)
+		print(selection_atom_name )
 		if not res:
 			print("Unable to set sytray !!")
 		else:
-			PageLauncherHook.gdk_add_filter(self.window, self.toto)
+			res_get = Gdk.selection_owner_get_for_display(display, selection_atom)
+			if res_get != self.window:
+				print("Unable to get sytray !!")	
+			else:
+				print("Owner is ok")	
+						
+			PageLauncherHook.set_system_tray_orientation(self.window, True)
+			PageLauncherHook.set_system_tray_filter(self.window,display, self)
 			#self.window.add_filter(self.toto)
 
 

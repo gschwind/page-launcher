@@ -2,7 +2,8 @@
 #include <pygobject.h>
 #include <clutter/clutter.h>
 #include <gdk/gdk.h>
-
+#include <X11/Xlib.h>
+#include <gdk/gdkx.h>
 #include <stdio.h>
 
 //#include <numpy/arrayobject.h>
@@ -100,49 +101,340 @@ static PyObject * py_set_strut(PyObject * self, PyObject * args) {
 	Py_RETURN_NONE;
 }
 
-static GdkFilterReturn call_python_filter (GdkXEvent *xevent, GdkEvent *event, gpointer data) {
+
+
+#define SYSTEM_TRAY_REQUEST_DOCK    0
+#define SYSTEM_TRAY_BEGIN_MESSAGE   1
+#define SYSTEM_TRAY_CANCEL_MESSAGE  2
+
+#define SYSTEM_TRAY_ORIENTATION_HORZ 0
+#define SYSTEM_TRAY_ORIENTATION_VERT 1
+
+static PyObject * py_set_system_tray_orientation(PyObject * self, PyObject * args) {
+	PyObject * py_gdk_window;
+	PyObject * py_vert;
+	if (!PyArg_ParseTuple(args, "OO", &py_gdk_window, &py_vert))
+		return NULL;
+
+	if(!pygobject_check(py_gdk_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		return NULL;
+	}
+
+	if(!PyBool_Check(py_vert)) {
+		return NULL;
+	}
+	long data[1];
+	data[0] = PyObject_IsTrue(py_vert) ? SYSTEM_TRAY_ORIENTATION_VERT : SYSTEM_TRAY_ORIENTATION_HORZ;
+
+	GdkAtom cardinal = gdk_atom_intern("CARDINAL", FALSE);
+	GdkAtom _net_system_tray_orientation = gdk_atom_intern("_NET_SYSTEM_TRAY_ORIENTATION", FALSE);
+
+	gdk_property_change(GDK_WINDOW(pygobject_get(py_gdk_window)),
+				_net_system_tray_orientation, cardinal, 32, GDK_PROP_MODE_REPLACE,
+				(guchar*) data, 1);
+	Py_RETURN_NONE;
+}
+
+#if 0
+static GdkFilterReturn call_python_filter (GdkXEvent *gdkxevent, GdkEvent *event, gpointer data) {
 	int retval;
   	PyGILState_STATE gstate;
 	gstate = PyGILState_Ensure();
+	 XEvent        *xevent = (XEvent *)gdkxevent;
 
-	PyObject * func = (PyObject*)data;
+	PyObject * panel = (PyObject*)data;
+	PyObject * func = PyObject_GetAttrString(panel, "tray_filter"); 
+	//PyObject * func_opcode = PyObject_GetAttrString(myobject, "tray_filter_opcode"); 
+	//PyObject * func_message_data = PyObject_GetAttrString(myobject, "tray_filter_message_data"); 
+
+	if (!PyCallable_Check(func)) {
+		PyErr_SetString(PyExc_TypeError, "parameter tray_filter be callable");
+		return GDK_FILTER_CONTINUE;
+	}
+
 	PyObject *py_event = pyg_boxed_new(GDK_TYPE_EVENT, event, FALSE, FALSE);
 	PyObject* args = Py_BuildValue("(O)",py_event);	
  	PyObject* result = PyObject_CallObject(func, args);
 	Py_DECREF(args);
 	Py_DECREF(py_event);
-   
-	if (result == NULL) {
-		PyErr_Print();
-		retval = GDK_FILTER_CONTINUE;
-	} else {
-		retval = PyLong_AsLong(result);
-	}
+
 
    	 PyGILState_Release(gstate);
-	return retval;
+#endif
+
+
+
+static void
+tray_manager_handle_dock_request (PyObject       *manager,
+				      XClientMessageEvent  *xevent)
+{
+printf("%s\n",__FUNCTION__);
+#if  0
+  GtkWidget *socket;
+  Window *window;
+  
+  socket = gtk_socket_new ();
+  
+  /* We need to set the child window here
+   * so that the client can call _get functions
+   * in the signal handler
+   */
+  window = g_new (Window, 1);
+  *window = xevent->data.l[2];
+      
+  g_object_set_data_full (G_OBJECT (socket),
+			  "egg-tray-child-window",
+			  window, g_free);
+  g_signal_emit (manager, manager_signals[TRAY_ICON_ADDED], 0,
+		 socket);
+
+  /* Add the socket only if it's been attached */
+  if (GTK_IS_WINDOW (gtk_widget_get_toplevel (GTK_WIDGET (socket))))
+    {
+      g_signal_connect (socket, "plug_removed",
+			G_CALLBACK (egg_tray_manager_plug_removed), manager);
+      
+      gtk_socket_add_id (GTK_SOCKET (socket), xevent->data.l[2]);
+
+      g_hash_table_insert (manager->socket_table, GINT_TO_POINTER (xevent->data.l[2]), socket);
+    }
+  else
+    gtk_widget_destroy (socket);
+#endif
 }
 
-static PyObject * py_gdk_add_filter(PyObject * self, PyObject * args) {
-	PyObject * pyobj; // the GdkWindow
-	PyObject * func; // the function to call
+static void
+tray_manager_handle_message_data (PyObject       *manager,
+				       XClientMessageEvent  *xevent)
+{
+printf("%s\n",__FUNCTION__);
+#if 0
+  GList *p;
+  int len;
+  
+  /* Try to see if we can find the
+   * pending message in the list
+   */
+  for (p = manager->messages; p; p = p->next)
+    {
+      PendingMessage *msg = p->data;
 
-	if (!PyArg_ParseTuple(args, "OO", &pyobj, &func))
-		return NULL;
+      if (xevent->window == msg->window)
+	{
+	  /* Append the message */
+	  len = MIN (msg->remaining_len, 20);
 
-    if (!PyCallable_Check(func)) {
-        PyErr_SetString(PyExc_TypeError, "parameter must be callable");
-        return NULL;
+	  memcpy ((msg->str + msg->len - msg->remaining_len),
+		  &xevent->data, len);
+	  msg->remaining_len -= len;
+
+	  if (msg->remaining_len == 0)
+	    {
+	      GtkSocket *socket;
+
+	      socket = g_hash_table_lookup (manager->socket_table, GINT_TO_POINTER (msg->window));
+
+	      if (socket)
+		{
+		  g_signal_emit (manager, manager_signals[MESSAGE_SENT], 0,
+				 socket, msg->str, msg->id, msg->timeout);
+		}
+	      manager->messages = g_list_remove_link (manager->messages,
+						      p);
+	      
+	      pending_message_free (msg);
+	    }
+
+	  return;
+	}
+    }
+#endif
+}
+
+static void
+tray_manager_handle_begin_message (PyObject       *manager,
+				       XClientMessageEvent  *xevent)
+{
+printf("%s\n",__FUNCTION__);
+#if 0
+  GList *p;
+  PendingMessage *msg;
+
+  /* Check if the same message is
+   * already in the queue and remove it if so
+   */
+  for (p = manager->messages; p; p = p->next)
+    {
+      PendingMessage *msg = p->data;
+
+      if (xevent->window == msg->window &&
+	  xevent->data.l[4] == msg->id)
+	{
+	  /* Hmm, we found it, now remove it */
+	  pending_message_free (msg);
+	  manager->messages = g_list_remove_link (manager->messages, p);
+	  break;
+	}
     }
 
-	if(pygobject_check(pyobj, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
-		GdkWindow * window = GDK_WINDOW(pygobject_get(pyobj));
-		Py_INCREF(func);
-		printf("YYYY %d\n", ((PyObject*)(func))->ob_refcnt);
-		gdk_window_add_filter(window, &call_python_filter, (gpointer)func);
-	} else {
-		printf("unknown object\n");
+  /* Now add the new message to the queue */
+  msg = g_new0 (PendingMessage, 1);
+  msg->window = xevent->window;
+  msg->timeout = xevent->data.l[2];
+  msg->len = xevent->data.l[3];
+  msg->id = xevent->data.l[4];
+  msg->remaining_len = msg->len;
+  msg->str = g_malloc (msg->len + 1);
+  msg->str[msg->len] = '\0';
+  manager->messages = g_list_prepend (manager->messages, msg);
+#endif
+}
+
+static void
+tray_manager_handle_cancel_message (PyObject       *manager,
+					XClientMessageEvent  *xevent)
+{
+printf("%s\n",__FUNCTION__);
+#if 0
+  GtkSocket *socket;
+  
+  socket = g_hash_table_lookup (manager->socket_table, GINT_TO_POINTER (xevent->window));
+  
+  if (socket)
+    {
+      g_signal_emit (manager, manager_signals[MESSAGE_CANCELLED], 0,
+		     socket, xevent->data.l[2]);
+    }
+#endif
+}
+
+
+static GdkFilterReturn
+tray_manager_handle_event (PyObject       *manager,
+			       XClientMessageEvent  *xevent)
+{
+  switch (xevent->data.l[1])
+    {
+    case SYSTEM_TRAY_REQUEST_DOCK:
+      tray_manager_handle_dock_request (manager, xevent);
+      return GDK_FILTER_REMOVE;
+
+    case SYSTEM_TRAY_BEGIN_MESSAGE:
+      tray_manager_handle_begin_message (manager, xevent);
+      return GDK_FILTER_REMOVE;
+
+    case SYSTEM_TRAY_CANCEL_MESSAGE:
+      tray_manager_handle_cancel_message (manager, xevent);
+      return GDK_FILTER_REMOVE;
+    default:
+      break;
+    }
+
+  return GDK_FILTER_CONTINUE;
+}
+
+static void
+tray_manager_unmanage (PyObject *manager) {
+printf("%s\n",__FUNCTION__);
+}
+static GdkFilterReturn call_python_filter (GdkXEvent *gdkxevent, GdkEvent *event, gpointer data) {
+  XEvent *xevent = (GdkXEvent *)gdkxevent;
+  PyObject *manager = data;
+  GdkFilterReturn retval = GDK_FILTER_CONTINUE;
+
+  	PyGILState_STATE gstate;
+	gstate = PyGILState_Ensure();
+
+printf("%s\n",__FUNCTION__);
+
+  if (xevent->type == ClientMessage)
+    {
+	printf("Client Message\n");
+
+	PyObject * py_opcode = PyObject_GetAttrString(manager, "atom_opcode");
+	PyObject * py_msg_data = PyObject_GetAttrString(manager, "atom_message_data");
+	
+	printf("Client Message %p %p\n", py_opcode, py_msg_data);
+
+	long opcode_atom = PyLong_AsLong(py_opcode);
+	long message_data_atom = PyLong_AsLong(py_msg_data);	
+      if (xevent->xclient.message_type == opcode_atom)
+	{
+	  retval =  tray_manager_handle_event (manager, (XClientMessageEvent *)xevent);
 	}
+      else if (xevent->xclient.message_type == message_data_atom)
+	{
+	  tray_manager_handle_message_data (manager, (XClientMessageEvent *)xevent);
+	  retval = GDK_FILTER_REMOVE;
+	}
+    }
+  else if (xevent->type == SelectionClear)
+    {
+      tray_manager_unmanage (manager);
+    }
+  
+ 
+
+   	 PyGILState_Release(gstate);
+  return retval;
+}
+
+static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
+	PyObject * pyobj_win; // the GdkWindow
+	PyObject * pyobj_display; // the GdkWindow
+	PyObject * panel; // the function to call
+
+	
+	if (!PyArg_ParseTuple(args, "OOO", &pyobj_win, &pyobj_display, &panel)) {
+		return NULL;
+	}
+
+	if(!pygobject_check(pyobj_win, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		PyErr_SetString(PyExc_TypeError, "parameter must be A GdkWindow");
+	}
+	if(!pygobject_check(pyobj_display, pygobject_lookup_class(GDK_TYPE_DISPLAY))) {
+		PyErr_SetString(PyExc_TypeError, "parameter must be A GdkDisplay");
+	}
+
+
+	GdkWindow * window = GDK_WINDOW(pygobject_get(pyobj_win));
+	GdkDisplay * display = GDK_DISPLAY(pygobject_get(pyobj_display));
+	guint32 timestamp = gdk_x11_get_server_time (window);
+
+
+	GdkScreen * screen = gdk_display_get_default_screen (display);
+	char * selection_atom_name = g_strdup_printf ("_NET_SYSTEM_TRAY_S%d",
+					 gdk_screen_get_number (screen));
+
+
+	GdkAtom selection_atom = gdk_atom_intern (selection_atom_name, FALSE);
+	g_free (selection_atom_name);
+	
+	/* Update Tray Manager */
+	{
+		Screen * xscreen = GDK_SCREEN_XSCREEN (screen);
+		XClientMessageEvent xev;
+	      
+	      	xev.type = ClientMessage;
+	      	xev.window = RootWindowOfScreen (xscreen);
+	      	xev.message_type = gdk_x11_get_xatom_by_name_for_display (display,
+			                                                "MANAGER");
+	      	xev.format = 32;
+	      	xev.data.l[0] = timestamp;
+	      	xev.data.l[1] = gdk_x11_atom_to_xatom_for_display (display,
+			                                         selection_atom);
+	      	xev.data.l[2] = gdk_x11_window_get_xid(window);
+	      	xev.data.l[3] = 0;	/* manager specific data */
+	      	xev.data.l[4] = 0;	/* manager specific data */
+
+	      	XSendEvent (GDK_DISPLAY_XDISPLAY (display),
+			  RootWindowOfScreen (xscreen),
+			  False, StructureNotifyMask, (XEvent *)&xev);
+	}	
+
+	/* Set filtering */
+	Py_INCREF(panel);
+	gdk_window_add_filter(window, &call_python_filter, (gpointer)panel);
 
 	Py_RETURN_NONE;
 }
@@ -155,7 +447,8 @@ static PyMethodDef methods[] =
 	TPL_FUNCTION_DOC(print, "simple print for testing"),
 	TPL_FUNCTION_DOC(print_type, "Print the type of a GObject"),
 	TPL_FUNCTION_DOC(set_strut, "set _NET_WM_STRUT"),
-	TPL_FUNCTION_DOC(gdk_add_filter, "implement gdk_add_filter"),
+	TPL_FUNCTION_DOC(set_system_tray_filter, "implement X11 event filtering"),
+	TPL_FUNCTION_DOC(set_system_tray_orientation, "set _NET_SYSTEM_TRAY_ORIENTATION"),
 	{NULL, NULL, 0, NULL} // sentinel
 };
 
