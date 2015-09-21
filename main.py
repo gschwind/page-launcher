@@ -954,22 +954,26 @@ class PanelGroupApp(PanelIcon):
 			tmp += "\n"
 		return tmp
 
-class PanelView(Clutter.Stage):
-	def tray_filter(self,a):
-		print("toto")
-		print(a.type)
-		return Gdk.FilterReturn.CONTINUE
-		#print(b)
-
-	def __init__(self):
+class PanelTray(Clutter.Group):
+	def __init__(self, panel, ico_size):
 		super().__init__()
+		self.panel = panel
+		self.icon_size_x = ico_size
+		self.icon_size_y = ico_size/2
+		self.sub_offset = 2
+		self.window = panel.window
+		#self.sub_icon_size = ico_size*margin
+		#self.sub_offset = (self.icon_size-self.sub_icon_size)/2
+		#self.text = Clutter.Text.new_full(font_clock, u"12:30",color_clock)
+		#self.text.set_line_alignment(Pango.Alignment.CENTER)
+		#self.text.set_size(ico_size, ico_size/2)
 
-		# Manualy create the window to setup properties before mapping the window		
-		self._create_panel_window()
+		self.icon_back = ItemMenu()
+		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
+		self.icon_back.set_position(0,0)
 
-		self.ico_size = 64
-		self.margin = 2
-		self.panel_width = self.ico_size+2*self.margin
+		self.add_child(self.icon_back)
+		#self.add_child(self.text)
 
 		display = ClutterGdk.get_default_display()
 		root_height = display.get_default_screen().get_root_window().get_height()
@@ -1004,7 +1008,78 @@ class PanelView(Clutter.Stage):
 			PageLauncherHook.set_system_tray_filter(self.window,display, self)
 			#self.window.add_filter(self.toto)
 
+	def dock_request(self, socket_id, window):
+		print('dock request')
+		print(socket_id)
+		print(window)
 
+		PageLauncherHook.dock_tray(self.window, ClutterGdk.get_default_display(), socket_id)
+		#socket = Gtk.Socket()
+		#socket.connect("plug-added", lambda s: s.set_size_request(16, 16))
+		#socket.connect("plug-removed", lambda s: s.set_size_request(-1, -1))
+		#socket = Gtk.ToggleButton("TOTO")
+		#socket.show()
+		#print('toto1')
+		#actor = Clutter.GtkClutterActor()
+		#actor = GtkClutter.Actor.new_with_contents(socket)
+		#print('toto1.0')
+		#widget = actor.get_widget()
+		#print('toto1.3')
+		#widget.add(socket)
+		#print('toto1.1')
+		#self.add_child(actor)
+		#print('toto2')		
+		#socket.add_id(socket_id)
+		#print('toto3')
+		#socket.show()
+		#print('toto23')	
+		#widget = actor.get_widget()
+		#print(widget)
+		#widget.add(socket)
+		# SYSTEM_TRAY_REQUEST_DOCK opcode = 0
+		#wnck_window = Wnck.Window.get(socket_id)
+		#gdk_window = Gdk.window_foreign_new(wnck_window.get_xid())
+#		dpy = ClutterGdk.get_default_display()
+#		obj = dpy.create_resource_object("window", socket_id)
+#                            obj.reparent(tray.window.id, 0, 0)   
+#                            obj.change_attributes(event_mask=(X.ExposureMask|X.StructureNotifyMask))
+#                            tray.tasks[task] = Obj(obj=obj, x=0, y=0, width=0, height=TRAY_I_HEIGHT)
+#                            tray.order.append(task)                            
+#                            self.updatePanel(root, win, panel)
+		#print('toto4')
+		
+	def message_begin(self, socket_id, window):
+		print('message begin')
+
+	def message_cancel(self, socket_id, window):
+		print('message cancel')
+
+	def tray_filter(self,a):
+		print("toto")
+		print(a.type)
+		return Gdk.FilterReturn.CONTINUE
+		#print(b)
+
+		
+class PanelView(Clutter.Stage):
+	
+
+	def __init__(self):
+		super().__init__()
+
+		# Manualy create the window to setup properties before mapping the window		
+		self._create_panel_window()
+
+		self.ico_size = 64
+		self.margin = 2
+		self.panel_width = self.ico_size+2*self.margin
+
+		
+
+		display = ClutterGdk.get_default_display()
+		root_height = display.get_default_screen().get_root_window().get_height()
+
+		screen = Wnck.Screen.get_default()
 		screen.connect("active-window-changed", self.on_active_window_change)
 		# tricks to create the window
 		ClutterGdk.set_stage_foreign(self, self.window)
@@ -1033,6 +1108,7 @@ class PanelView(Clutter.Stage):
 
 
 		self.list_sys_apps.append(PanelClock(self, self.ico_size))
+		self.list_sys_apps.append(PanelTray(self, self.ico_size))
 		self.list_sys_apps.append(PanelApps(self, self.ico_size))
 		self.list_sys_apps.append(PanelShutdown(self, self.ico_size))
 
@@ -1464,6 +1540,7 @@ if __name__ == '__main__':
  Gdk.init(sys.argv)
  Clutter.set_windowing_backend(Clutter.WINDOWING_GDK)
  Clutter.init(sys.argv)
+ GtkClutter.init(sys.argv)
  
  # check if page-launcher is already running
  loop = DBusGMainLoop(set_as_default=True)

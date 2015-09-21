@@ -169,6 +169,24 @@ tray_manager_handle_dock_request (PyObject       *manager,
 				      XClientMessageEvent  *xevent)
 {
 printf("%s\n",__FUNCTION__);
+
+PyObject * func = PyObject_GetAttrString(manager, "dock_request");
+	if(!func) {
+		PyErr_SetString(PyExc_TypeError, "dock_request callback does not exist");
+		return;
+	}
+
+	if (!PyCallable_Check(func)) {
+			PyErr_SetString(PyExc_TypeError, "dock_request must be callable");
+		return;
+		}
+
+
+
+
+	PyObject* args = Py_BuildValue("(i,i)",xevent->data.l[2], GINT_TO_POINTER (xevent->window));	
+ 	PyObject_CallObject(func, args);
+	Py_DECREF(args);
 #if  0
   GtkWidget *socket;
   Window *window;
@@ -294,7 +312,23 @@ static void
 tray_manager_handle_cancel_message (PyObject       *manager,
 					XClientMessageEvent  *xevent)
 {
-printf("%s\n",__FUNCTION__);
+	printf("%s\n",__FUNCTION__);
+	PyObject * func = PyObject_GetAttrString(manager, "message_cancel");
+	if(!func) {
+		PyErr_SetString(PyExc_TypeError, "message_cancel callback does not exist");
+return;
+	}
+
+	if (!PyCallable_Check(func)) {
+			PyErr_SetString(PyExc_TypeError, "message_cancel must be callable");
+			return;
+		}
+
+	
+
+	PyObject* args = Py_BuildValue("(i,i)",xevent->data.l[2], GINT_TO_POINTER (xevent->window));	
+ 	PyObject_CallObject(func, args);
+	Py_DECREF(args);
 #if 0
   GtkSocket *socket;
   
@@ -439,6 +473,75 @@ static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
 	Py_RETURN_NONE;
 }
 
+#define XEMBED_EMBEDDED_NOTIFY 0
+
+static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
+	PyObject * py_gdk_window;
+	PyObject * pyobj_display; // the GdkWindow
+	PyObject * py_win_id;
+	if (!PyArg_ParseTuple(args, "OOO", &py_gdk_window, &pyobj_display, &py_win_id))
+		return NULL;
+
+	if(!pygobject_check(py_gdk_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		return NULL;
+	}
+
+if(!pygobject_check(pyobj_display, pygobject_lookup_class(GDK_TYPE_DISPLAY))) {
+		PyErr_SetString(PyExc_TypeError, "parameter must be A GdkDisplay");
+		return NULL;
+	}
+
+	if(!PyLong_Check(py_win_id)) {
+		return NULL;
+	}
+	long win_id = PyLong_AsLong(py_win_id);
+	GdkWindow * window = GDK_WINDOW(pygobject_get(py_gdk_window));
+	GdkDisplay * display = GDK_DISPLAY(pygobject_get(pyobj_display));
+	long systray_win_id = gdk_x11_window_get_xid(window);
+
+	printf("OO: %d %d\n",win_id, systray_win_id);
+     //ewmh_set_wm_state(s->win, NormalState);
+
+#if 0
+	GdkAtom wm_state = gdk_atom_intern("WM_STATE", FALSE);
+	unsigned char d[] = { NormalState, None };
+    XChangeProperty(GDK_DISPLAY_XDISPLAY (display), win_id, gdk_x11_atom_to_xatom_for_display (display,wm_state),
+                     gdk_x11_atom_to_xatom_for_display (display,wm_state), 32, PropModeReplace, d, 2);
+#endif
+	//GdkAtom cardinal = gdk_atom_intern("CARDINAL", FALSE);
+	//GdkAtom _net_system_tray_orientation = gdk_atom_intern("_NET_SYSTEM_TRAY_ORIENTATION", FALSE);
+
+	//gdk_property_change(GDK_WINDOW(pygobject_get(py_gdk_window)),
+	//			wm_state, wm_state, 32, GDK_PROP_MODE_REPLACE,
+	//			(guchar*) d, 2);
+
+     XSelectInput(GDK_DISPLAY_XDISPLAY (display), win_id, StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask);
+     XReparentWindow(GDK_DISPLAY_XDISPLAY (display), win_id, systray_win_id, 0, 0);
+
+#if 0
+	{
+
+	  XEvent ev;
+		ev.xclient.type = ClientMessage;
+		ev.xclient.window = win_id;
+		ev.xclient.message_type = gdk_x11_get_xatom_by_name_for_display (display,
+			                                                "_XEMBED");
+		ev.xclient.format = 32;
+		ev.xclient.data.l[0] = gdk_x11_get_server_time (window);
+		ev.xclient.data.l[1] = XEMBED_EMBEDDED_NOTIFY;
+		ev.xclient.data.l[2] = 0;
+		ev.xclient.data.l[3] = systray_win_id;
+		ev.xclient.data.l[4] = 0; // version
+
+			XSendEvent (GDK_DISPLAY_XDISPLAY (display),
+				  win_id,
+				  False, NoEventMask, (XEvent *)&ev);
+	}
+#endif
+
+	Py_RETURN_NONE;
+}
+
 #define TPL_FUNCTION(name) {#name, py_##name, METH_VARARGS, "Not documented"}
 #define TPL_FUNCTION_DOC(name, doc) {#name, py_##name, METH_VARARGS, doc}
 
@@ -447,6 +550,7 @@ static PyMethodDef methods[] =
 	TPL_FUNCTION_DOC(print, "simple print for testing"),
 	TPL_FUNCTION_DOC(print_type, "Print the type of a GObject"),
 	TPL_FUNCTION_DOC(set_strut, "set _NET_WM_STRUT"),
+	TPL_FUNCTION_DOC(dock_tray, "dock tray"),
 	TPL_FUNCTION_DOC(set_system_tray_filter, "implement X11 event filtering"),
 	TPL_FUNCTION_DOC(set_system_tray_orientation, "set _NET_SYSTEM_TRAY_ORIENTATION"),
 	{NULL, NULL, 0, NULL} // sentinel
