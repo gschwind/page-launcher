@@ -13,6 +13,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+PyObject * panel=NULL; // the function to call
+
 struct module_state {
 	PyObject * Error;
 };
@@ -369,8 +372,31 @@ tray_manager_handle_event (PyObject       *manager,
 
 static void
 tray_manager_unmanage (PyObject *manager) {
-printf("%s\n",__FUNCTION__);
+printf("FIXME %s\n",__FUNCTION__);
 }
+static void
+tray_undock (PyObject *manager, XDestroyWindowEvent * xevent) {
+printf("%s\n",__FUNCTION__);
+
+PyObject * func = PyObject_GetAttrString(manager, "undock_request");
+	if(!func) {
+		PyErr_SetString(PyExc_TypeError, "undock_request callback does not exist");
+		return;
+	}
+
+	if (!PyCallable_Check(func)) {
+			PyErr_SetString(PyExc_TypeError, "undock_request must be callable");
+		return;
+		}
+
+
+
+
+	PyObject* args = Py_BuildValue("(i,i)",xevent->event, GINT_TO_POINTER (xevent->window));	
+ 	PyObject_CallObject(func, args);
+	Py_DECREF(args);
+}
+
 static GdkFilterReturn call_python_filter (GdkXEvent *gdkxevent, GdkEvent *event, gpointer data) {
   XEvent *xevent = (GdkXEvent *)gdkxevent;
   PyObject *manager = data;
@@ -406,7 +432,13 @@ printf("%s\n",__FUNCTION__);
     {
       tray_manager_unmanage (manager);
     }
-  
+  else if (xevent->type == DestroyNotify)
+    {
+      tray_undock (manager, (XDestroyWindowEvent *)xevent);
+    }
+	else {
+	printf("Not handled %d\n",xevent->type);
+}
  
 
    	 PyGILState_Release(gstate);
@@ -416,7 +448,6 @@ printf("%s\n",__FUNCTION__);
 static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
 	PyObject * pyobj_win; // the GdkWindow
 	PyObject * pyobj_display; // the GdkWindow
-	PyObject * panel; // the function to call
 
 	
 	if (!PyArg_ParseTuple(args, "OOO", &pyobj_win, &pyobj_display, &panel)) {
@@ -468,12 +499,119 @@ static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
 
 	/* Set filtering */
 	Py_INCREF(panel);
+	XSelectInput(GDK_DISPLAY_XDISPLAY (display), gdk_x11_window_get_xid(window), SubstructureNotifyMask);
 	gdk_window_add_filter(window, &call_python_filter, (gpointer)panel);
 
 	Py_RETURN_NONE;
 }
 
-#define XEMBED_EMBEDDED_NOTIFY 0
+/* XEMBED messages */
+#define XEMBED_EMBEDDED_NOTIFY          0
+#define XEMBED_WINDOW_ACTIVATE          1
+#define XEMBED_WINDOW_DEACTIVATE        2
+#define XEMBED_REQUEST_FOCUS            3
+#define XEMBED_FOCUS_IN                 4
+#define XEMBED_FOCUS_OUT                5
+#define XEMBED_FOCUS_NEXT               6   
+#define XEMBED_FOCUS_PREV               7
+#define XEMBED_MODALITY_ON              10
+#define XEMBED_MODALITY_OFF             11
+#define XEMBED_REGISTER_ACCELERATOR     12
+#define XEMBED_UNREGISTER_ACCELERATOR   13
+#define XEMBED_ACTIVATE_ACCELERATOR     14
+
+/* Details for XEMBED_FOCUS_IN */
+#define XEMBED_FOCUS_CURRENT            0
+#define XEMBED_FOCUS_FIRST              1
+#define XEMBED_FOCUS_LAST               2
+
+
+
+//void xembed_send(GdkDisplay * display, uint32_t win_id, uint32_t in1, uint32_t in2=0, uint32_t in3=0, uint32_t in4=0);
+
+void xembed_send(GdkDisplay * display, uint32_t win_id, uint32_t in1, uint32_t in2, uint32_t in3, uint32_t in4)
+{
+
+	  XEvent ev;
+		ev.xclient.type = ClientMessage;
+		ev.xclient.window = win_id;
+		ev.xclient.message_type = gdk_x11_get_xatom_by_name_for_display (display,
+			                                                "_XEMBED");
+		ev.xclient.format = 32;
+		ev.xclient.data.l[0] = CurrentTime;
+		ev.xclient.data.l[1] = in1;
+		ev.xclient.data.l[2] = in2;
+		ev.xclient.data.l[3] = in3;
+		ev.xclient.data.l[4] = in4;
+
+
+
+			XSendEvent (GDK_DISPLAY_XDISPLAY (display),
+				  win_id,
+				  False, NoEventMask, (XEvent *)&ev);
+	}
+
+static PyObject * py_move_tray(PyObject * self, PyObject * args) {
+	PyObject * py_gdk_window;
+	PyObject * pyobj_display; // the GdkWindow
+	PyObject * py_win_id;
+	PyObject * py_x;
+	PyObject * py_y;
+	PyObject * py_sz_x;
+	PyObject * py_sz_y;
+	if (!PyArg_ParseTuple(args, "OOOOOOO", &py_gdk_window, &pyobj_display, &py_win_id, &py_x, &py_y, &py_sz_x, &py_sz_y))
+		return NULL;
+
+	if(!pygobject_check(py_gdk_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		PyErr_SetString(PyExc_TypeError, "parameter must be A Windo");
+		return NULL;
+	}
+
+	if(!pygobject_check(pyobj_display, pygobject_lookup_class(GDK_TYPE_DISPLAY))) {
+		PyErr_SetString(PyExc_TypeError, "parameter must be A GdkDisplay");
+		return NULL;
+	}
+
+	if(!PyLong_Check(py_win_id)) {
+		PyErr_SetString(PyExc_TypeError, "win_id parameter must be A Long");
+		return NULL;
+	}
+
+	if(!PyLong_Check(py_x)) {
+		PyErr_SetString(PyExc_TypeError, "x parameter must be A Long");
+		return NULL;
+	}
+
+	if(!PyLong_Check(py_y)) {
+		PyErr_SetString(PyExc_TypeError, "y parameter must be A Long");
+		return NULL;
+	}
+
+	if(!PyLong_Check(py_sz_x)) {
+		PyErr_SetString(PyExc_TypeError, "sz_x parameter must be A Long");
+		return NULL;
+	}
+
+	if(!PyLong_Check(py_sz_y)) {
+		PyErr_SetString(PyExc_TypeError, "sz_y parameter must be A Long");
+		return NULL;
+	}
+	long win_id = PyLong_AsLong(py_win_id);
+	long x = PyLong_AsLong(py_x);
+	long y = PyLong_AsLong(py_y);
+	long sz_x = PyLong_AsLong(py_sz_x);
+	long sz_y = PyLong_AsLong(py_sz_y);
+	GdkDisplay * display = GDK_DISPLAY(pygobject_get(pyobj_display));
+printf("%d\n",__LINE__);
+	XMoveResizeWindow(GDK_DISPLAY_XDISPLAY (display),  win_id, x, y, sz_x, sz_y);
+printf("%d\n",__LINE__);
+	//XResizeWindow(GDK_DISPLAY_XDISPLAY (display),  win_id, 1, 1);
+	printf("%d\n",__LINE__);
+	XMapWindow(GDK_DISPLAY_XDISPLAY (display),  win_id);
+	printf("%d\n",__LINE__);
+
+	Py_RETURN_NONE;
+}
 
 static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
 	PyObject * py_gdk_window;
@@ -497,48 +635,34 @@ if(!pygobject_check(pyobj_display, pygobject_lookup_class(GDK_TYPE_DISPLAY))) {
 	long win_id = PyLong_AsLong(py_win_id);
 	GdkWindow * window = GDK_WINDOW(pygobject_get(py_gdk_window));
 	GdkDisplay * display = GDK_DISPLAY(pygobject_get(pyobj_display));
+	GdkWindow * win_sub = gdk_x11_window_foreign_new_for_display(display, win_id);
 	long systray_win_id = gdk_x11_window_get_xid(window);
 
 	printf("OO: %d %d\n",win_id, systray_win_id);
-     //ewmh_set_wm_state(s->win, NormalState);
+   
+	XUnmapWindow(GDK_DISPLAY_XDISPLAY (display),  win_id);
 
-#if 0
-	GdkAtom wm_state = gdk_atom_intern("WM_STATE", FALSE);
-	unsigned char d[] = { NormalState, None };
-    XChangeProperty(GDK_DISPLAY_XDISPLAY (display), win_id, gdk_x11_atom_to_xatom_for_display (display,wm_state),
-                     gdk_x11_atom_to_xatom_for_display (display,wm_state), 32, PropModeReplace, d, 2);
-#endif
-	//GdkAtom cardinal = gdk_atom_intern("CARDINAL", FALSE);
-	//GdkAtom _net_system_tray_orientation = gdk_atom_intern("_NET_SYSTEM_TRAY_ORIENTATION", FALSE);
+	//printf("%d\n",__LINE__);
+	//XResizeWindow(GDK_DISPLAY_XDISPLAY (display),  win_id, 1, 1);
+	//printf("%d\n",__LINE__);
+	XSetWindowBackground(GDK_DISPLAY_XDISPLAY (display), win_id, 0);
+printf("%d\n",__LINE__);
+	    
+XSelectInput(GDK_DISPLAY_XDISPLAY (display), win_id, StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask);
+	printf("%d\n",__LINE__);
+	XReparentWindow(GDK_DISPLAY_XDISPLAY (display), win_id, systray_win_id, 0, 0);
 
-	//gdk_property_change(GDK_WINDOW(pygobject_get(py_gdk_window)),
-	//			wm_state, wm_state, 32, GDK_PROP_MODE_REPLACE,
-	//			(guchar*) d, 2);
+	printf("%d\n",__LINE__);
+	gdk_window_add_filter(win_sub, &call_python_filter, (gpointer)panel);
 
-     XSelectInput(GDK_DISPLAY_XDISPLAY (display), win_id, StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask);
-     XReparentWindow(GDK_DISPLAY_XDISPLAY (display), win_id, systray_win_id, 0, 0);
-
-#if 0
-	{
-
-	  XEvent ev;
-		ev.xclient.type = ClientMessage;
-		ev.xclient.window = win_id;
-		ev.xclient.message_type = gdk_x11_get_xatom_by_name_for_display (display,
-			                                                "_XEMBED");
-		ev.xclient.format = 32;
-		ev.xclient.data.l[0] = gdk_x11_get_server_time (window);
-		ev.xclient.data.l[1] = XEMBED_EMBEDDED_NOTIFY;
-		ev.xclient.data.l[2] = 0;
-		ev.xclient.data.l[3] = systray_win_id;
-		ev.xclient.data.l[4] = 0; // version
-
-			XSendEvent (GDK_DISPLAY_XDISPLAY (display),
-				  win_id,
-				  False, NoEventMask, (XEvent *)&ev);
-	}
-#endif
-
+///g_object_unref(win_sub) ???
+	printf("%d\n",__LINE__);
+	xembed_send(display, win_id, XEMBED_EMBEDDED_NOTIFY, 0, systray_win_id, 0);
+	printf("%d\n",__LINE__);
+	xembed_send(display, win_id, XEMBED_WINDOW_ACTIVATE, 0, 0, 0);
+	printf("%d\n",__LINE__);
+	xembed_send(display, win_id, XEMBED_FOCUS_IN, XEMBED_FOCUS_CURRENT, 0, 0);
+		printf("%d\n",__LINE__);
 	Py_RETURN_NONE;
 }
 
@@ -551,6 +675,7 @@ static PyMethodDef methods[] =
 	TPL_FUNCTION_DOC(print_type, "Print the type of a GObject"),
 	TPL_FUNCTION_DOC(set_strut, "set _NET_WM_STRUT"),
 	TPL_FUNCTION_DOC(dock_tray, "dock tray"),
+	TPL_FUNCTION_DOC(move_tray, "move tray "),
 	TPL_FUNCTION_DOC(set_system_tray_filter, "implement X11 event filtering"),
 	TPL_FUNCTION_DOC(set_system_tray_orientation, "set _NET_SYSTEM_TRAY_ORIENTATION"),
 	{NULL, NULL, 0, NULL} // sentinel

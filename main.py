@@ -763,6 +763,8 @@ class PanelIcon(Clutter.Group):
 		self.set_easing_mode(Clutter.AnimationMode.EASE_IN_OUT_CUBIC);
 		self.set_easing_duration(100);
 
+	def get_size_y(self):
+		return self.icon_size_y
 
 class PanelClock(Clutter.Group):
 	def __init__(self, panel, ico_size):
@@ -785,7 +787,9 @@ color_clock)
 		self.add_child(self.icon_back)
 		self.add_child(self.text)
 
-		
+
+	def get_size_y(self):
+		return self.icon_size_y
 	
 	def set_position(self,x, y):
 		super().set_position(x,y)
@@ -874,7 +878,7 @@ class PanelGroupApp(PanelIcon):
 	
 
 	def unregister(self):
-		print("UNREG")
+		#print("UNREG")
 		self.hide_all()
 		self.destroy_all_children()
 		self.get_parent().remove_child(self)
@@ -962,6 +966,7 @@ class PanelTray(Clutter.Group):
 		self.icon_size_y = ico_size/2
 		self.sub_offset = 2
 		self.window = panel.window
+		self.dock_list = []
 		#self.sub_icon_size = ico_size*margin
 		#self.sub_offset = (self.icon_size-self.sub_icon_size)/2
 		#self.text = Clutter.Text.new_full(font_clock, u"12:30",color_clock)
@@ -971,6 +976,7 @@ class PanelTray(Clutter.Group):
 		self.icon_back = ItemMenu()
 		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
 		self.icon_back.set_position(0,0)
+		self.icon_back.set_color(Clutter.Color.new(0,0,0,255))
 
 		self.add_child(self.icon_back)
 		#self.add_child(self.text)
@@ -1008,12 +1014,39 @@ class PanelTray(Clutter.Group):
 			PageLauncherHook.set_system_tray_filter(self.window,display, self)
 			#self.window.add_filter(self.toto)
 
+
+	def get_size_y(self):
+		return len(self.dock_list)*(32+1)+4
+
+	def set_position(self,x, y):
+		super().set_position(x,y)
+		self.icon_back.set_height(self.get_size_y())
+		
+		sz_x_ico = 32
+		sz_y_ico = 32
+		ind = 0
+		tmp_y = 2
+		x_off = (self.icon_size_x-sz_x_ico)/2
+		print(x_off)
+		for win_id in self.dock_list:
+			PageLauncherHook.move_tray(self.window, ClutterGdk.get_default_display(), win_id, int(x_off), int(tmp_y+y), sz_x_ico, sz_y_ico)
+			tmp_y = tmp_y + sz_y_ico + 1
+			
+
+
+	def undock_request(self, socket_id, window):
+		print('undock request')
+		print(socket_id)
+		print(window)
+		self.dock_list.remove(socket_id)
+
 	def dock_request(self, socket_id, window):
 		print('dock request')
 		print(socket_id)
 		print(window)
 
 		PageLauncherHook.dock_tray(self.window, ClutterGdk.get_default_display(), socket_id)
+		self.dock_list.append(socket_id)
 		#socket = Gtk.Socket()
 		#socket.connect("plug-added", lambda s: s.set_size_request(16, 16))
 		#socket.connect("plug-removed", lambda s: s.set_size_request(-1, -1))
@@ -1332,7 +1365,7 @@ class PanelView(Clutter.Stage):
 		# Update icon position
 		pos_y = self.get_height()-self.margin
 		for grp in self.list_sys_apps:
-			pos_y -= grp.icon_size_y+self.margin
+			pos_y -= grp.get_size_y()+self.margin
 			#print(pos_y)			
 			grp.set_position(self.margin, pos_y+self.margin)
 			
