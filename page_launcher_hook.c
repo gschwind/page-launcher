@@ -138,6 +138,42 @@ static PyObject * py_set_system_tray_orientation(PyObject * self, PyObject * arg
 	Py_RETURN_NONE;
 }
 
+static PyObject * py_set_system_tray_visual(PyObject * self, PyObject * args) {
+	PyObject * pyobj_win; // the GdkWindow
+	PyObject * pyobj_display; // the GdkWindow
+
+	if (!PyArg_ParseTuple(args, "OO", &pyobj_win, &pyobj_display)) {
+		return NULL;
+	}
+
+	if(!pygobject_check(pyobj_win, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		PyErr_SetString(PyExc_TypeError, "parameter must be A GdkWindow");
+	}
+	if(!pygobject_check(pyobj_display, pygobject_lookup_class(GDK_TYPE_DISPLAY))) {
+		PyErr_SetString(PyExc_TypeError, "parameter must be A GdkDisplay");
+	}
+
+	GdkWindow * window = GDK_WINDOW(pygobject_get(pyobj_win));
+	GdkDisplay * display = GDK_DISPLAY(pygobject_get(pyobj_display));
+	
+
+	long data[1];
+	{
+		XWindowAttributes window_attributes;
+		XGetWindowAttributes(GDK_DISPLAY_XDISPLAY(display), gdk_x11_window_get_xid(window), &window_attributes);
+		data[0] = XVisualIDFromVisual(window_attributes.visual);
+	}
+
+	GdkAtom visualid = gdk_atom_intern("VISUALID", FALSE);
+	GdkAtom _net_system_tray_visual = gdk_atom_intern("_NET_SYSTEM_TRAY_VISUAL", FALSE);
+
+	gdk_property_change(GDK_WINDOW(pygobject_get(pyobj_win)),
+				_net_system_tray_visual, visualid, 32, GDK_PROP_MODE_REPLACE,
+				(guchar*) data, 1);
+	Py_RETURN_NONE;
+}
+
+
 #if 0
 static GdkFilterReturn call_python_filter (GdkXEvent *gdkxevent, GdkEvent *event, gpointer data) {
 	int retval;
@@ -397,6 +433,49 @@ PyObject * func = PyObject_GetAttrString(manager, "undock_request");
 	Py_DECREF(args);
 }
 
+
+static GdkFilterReturn call_python_filter_inter (GdkXEvent *gdkxevent, GdkEvent *event, gpointer data) {
+	XEvent *xevent = (GdkXEvent *)gdkxevent;
+	PyObject *manager = data;
+	GdkFilterReturn retval = GDK_FILTER_CONTINUE;
+
+printf("%s\n",__FUNCTION__);
+
+	if (xevent->type == Expose) {
+		XExposeEvent * xexposeevent = (XExposeEvent *) xevent; 
+		printf("Client Expose %d\n", xexposeevent->window);
+
+{
+//GdkWindow * wininter = gdk_x11_window_foreign_new_for_display(display, win_inter);
+	//cairo_t * cr = gdk_cairo_create (wininter);
+	Window win_inter = xexposeevent->window;
+	Display * xdisplay = xexposeevent->display;
+	XWindowAttributes window_inter_attributes;
+	XGetWindowAttributes(xdisplay, win_inter, &window_inter_attributes);
+
+
+GdkWindow * wininter = gdk_x11_window_foreign_new_for_display(gdk_x11_lookup_xdisplay (xdisplay), win_inter);
+	gdk_window_resize(wininter,64,64);
+	cairo_t * cr = gdk_cairo_create (wininter);
+//	cairo_t * cr = cairo_xlib_surface_create(xdisplay, win_inter, window_inter_attributes.visual ,32,32); 
+	if(cr) {
+//	cairo_xlib_surface_set_size(cr, 32, 32);
+ 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+ 	cairo_set_source_rgba(cr, 1, 0, 0, 1);
+ 	cairo_paint(cr);
+	//cairo_rectangle(cr, 0, 0, 32, 32);
+    //cairo_fill(cr);
+	cairo_destroy(cr);
+ 	} else {
+		printf("Unable to create cairo surface",cr);
+	}    
+}
+
+	}
+
+ return retval;
+}
+
 static GdkFilterReturn call_python_filter (GdkXEvent *gdkxevent, GdkEvent *event, gpointer data) {
   XEvent *xevent = (GdkXEvent *)gdkxevent;
   PyObject *manager = data;
@@ -555,11 +634,13 @@ static PyObject * py_move_tray(PyObject * self, PyObject * args) {
 	PyObject * py_gdk_window;
 	PyObject * pyobj_display; // the GdkWindow
 	PyObject * py_win_id;
+	PyObject * py_win_inter;
 	PyObject * py_x;
 	PyObject * py_y;
 	PyObject * py_sz_x;
 	PyObject * py_sz_y;
-	if (!PyArg_ParseTuple(args, "OOOOOOO", &py_gdk_window, &pyobj_display, &py_win_id, &py_x, &py_y, &py_sz_x, &py_sz_y))
+
+	if (!PyArg_ParseTuple(args, "OOOOOOOO", &py_gdk_window, &pyobj_display, &py_win_id, &py_win_inter, &py_x, &py_y, &py_sz_x, &py_sz_y))
 		return NULL;
 
 	if(!pygobject_check(py_gdk_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
@@ -574,6 +655,11 @@ static PyObject * py_move_tray(PyObject * self, PyObject * args) {
 
 	if(!PyLong_Check(py_win_id)) {
 		PyErr_SetString(PyExc_TypeError, "win_id parameter must be A Long");
+		return NULL;
+	}
+
+	if(!PyLong_Check(py_win_inter)) {
+		PyErr_SetString(PyExc_TypeError, "win_inter parameter must be A Long");
 		return NULL;
 	}
 
@@ -597,22 +683,85 @@ static PyObject * py_move_tray(PyObject * self, PyObject * args) {
 		return NULL;
 	}
 	long win_id = PyLong_AsLong(py_win_id);
+	long win_inter = PyLong_AsLong(py_win_inter);
 	long x = PyLong_AsLong(py_x);
 	long y = PyLong_AsLong(py_y);
 	long sz_x = PyLong_AsLong(py_sz_x);
 	long sz_y = PyLong_AsLong(py_sz_y);
 	GdkDisplay * display = GDK_DISPLAY(pygobject_get(pyobj_display));
+	Display * xdisplay = GDK_DISPLAY_XDISPLAY (display);
+	GdkScreen * screen = gdk_display_get_default_screen (display);
+	Screen * xscreen = GDK_SCREEN_XSCREEN (screen);
+
+printf("%d id:%d inter:%d\n",__LINE__, win_id, win_inter);
+XMoveResizeWindow(xdisplay, win_id, 0,0,  sz_x, sz_y);
 printf("%d\n",__LINE__);
-	XMoveResizeWindow(GDK_DISPLAY_XDISPLAY (display),  win_id, x, y, sz_x, sz_y);
+XMoveResizeWindow(xdisplay,  win_inter, x, y, sz_x, sz_y);
 printf("%d\n",__LINE__);
 	//XResizeWindow(GDK_DISPLAY_XDISPLAY (display),  win_id, 1, 1);
 	printf("%d\n",__LINE__);
-	XMapWindow(GDK_DISPLAY_XDISPLAY (display),  win_id);
+	XMapWindow(xdisplay,  win_id);
+   XMapWindow(xdisplay, win_inter); 
+
+
+
+#if 1
+{
+
+	GdkWindow * wininter = gdk_x11_window_foreign_new_for_display(display, win_inter);
+#if 1
+	cairo_t * cr = gdk_cairo_create (wininter);
+ 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+ 	cairo_set_source_rgba(cr, 1, 0, 1, 0);
+ 	cairo_paint(cr);
+	cairo_destroy(cr);    
+#endif
+	}
+#endif
+
 	printf("%d\n",__LINE__);
 
 	Py_RETURN_NONE;
 }
 
+static PyObject * py_undock_tray(PyObject * self, PyObject * args) {
+	PyObject * py_gdk_window;
+	PyObject * pyobj_display; // the GdkWindow
+	PyObject * py_win_id;
+	PyObject * py_win_inter;
+
+	if (!PyArg_ParseTuple(args, "OOOO", &py_gdk_window, &pyobj_display, &py_win_id, &py_win_inter))
+		return NULL;
+
+	if(!pygobject_check(py_gdk_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		PyErr_SetString(PyExc_TypeError, "parameter must be A Windo");
+		return NULL;
+	}
+
+	if(!pygobject_check(pyobj_display, pygobject_lookup_class(GDK_TYPE_DISPLAY))) {
+		PyErr_SetString(PyExc_TypeError, "parameter must be A GdkDisplay");
+		return NULL;
+	}
+
+	if(!PyLong_Check(py_win_id)) {
+		PyErr_SetString(PyExc_TypeError, "win_id parameter must be A Long");
+		return NULL;
+	}
+
+	if(!PyLong_Check(py_win_inter)) {
+		PyErr_SetString(PyExc_TypeError, "win_inter parameter must be A Long");
+		return NULL;
+	}
+
+	long win_id = PyLong_AsLong(py_win_id);
+	long win_inter = PyLong_AsLong(py_win_inter);
+	GdkDisplay * display = GDK_DISPLAY(pygobject_get(pyobj_display));
+	Display * xdisplay = GDK_DISPLAY_XDISPLAY (display);
+
+	XDestroyWindow(xdisplay, win_inter);
+
+	Py_RETURN_NONE;
+}
 static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
 	PyObject * py_gdk_window;
 	PyObject * pyobj_display; // the GdkWindow
@@ -638,22 +787,150 @@ if(!pygobject_check(pyobj_display, pygobject_lookup_class(GDK_TYPE_DISPLAY))) {
 	GdkWindow * win_sub = gdk_x11_window_foreign_new_for_display(display, win_id);
 	long systray_win_id = gdk_x11_window_get_xid(window);
 
+printf("%d\n",__LINE__);
+	    
+
+	GdkScreen * screen = gdk_display_get_default_screen (display);
+	Screen * xscreen = GDK_SCREEN_XSCREEN (screen);
+	Display * xdisplay = GDK_DISPLAY_XDISPLAY (display);
+printf("%d\n",__LINE__);
+
+
+	XWindowAttributes panel_attributes;
+	XGetWindowAttributes(xdisplay, systray_win_id, &panel_attributes);
+
+	XWindowAttributes window_attributes;
+	XGetWindowAttributes(xdisplay, win_id, &window_attributes);
+
+	    
+printf("%d %d depth:%d panel:%d\n",__LINE__, win_id, window_attributes.depth, panel_attributes.depth);
+Window win_inter;
+
+Colormap colormap = XCreateColormap(
+            xdisplay,
+            win_id,
+            panel_attributes.visual, AllocNone );
+	printf("%d\n",__LINE__);
+
+#if 0
+{
+	XSetWindowAttributes pattr;
+	pattr.override_redirect = False;
+	pattr.background_pixel = XBlackPixelOfScreen(xscreen);
+	pattr.border_pixel = XBlackPixelOfScreen(xscreen);
+	pattr.event_mask = StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask;//ButtonPressMask|ExposureMask|EnterWindowMask;
+	pattr.colormap = colormap;
+	win_inter = XCreateWindow(xdisplay, systray_win_id, 0, 0, 16, 16,1, panel_attributes.depth, CopyFromParent, panel_attributes.visual, CWBackPixel|CWBorderPixel|CWEventMask|CWColormap, &pattr);
+	printf("%d\n",__LINE__);
+}
+#endif
+#if 0
+if(window_attributes.depth == 32) {
+	XSetWindowAttributes pattr;
+	pattr.override_redirect = False;
+	pattr.background_pixel = XBlackPixelOfScreen(xscreen);
+	pattr.border_pixel = XBlackPixelOfScreen(xscreen);
+	pattr.event_mask = StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask;//ButtonPressMask|ExposureMask|EnterWindowMask;
+	win_inter = XCreateWindow(xdisplay, systray_win_id, 0, 0, 16, 16,1, window_attributes.depth, CopyFromParent, panel_attributes.visual, CWBackPixel|CWBorderPixel|CWEventMask, &pattr);
+printf("%d\n",__LINE__);
+} else
+#endif 
+#if 0
+{
+ 	XSetWindowAttributes wc;
+    wc.override_redirect = True;
+    wc.background_pixel = BlackPixelOfScreen(xscreen);
+    wc.border_pixel = BlackPixelOfScreen(xscreen);
+    wc.event_mask = /* SOME EVENT MASK */0;
+	//wc.colormap = colormap;
+    win_inter = XCreateWindow(xdisplay, RootWindowOfScreen (xscreen), 0, 0, 100, 100, 0,
+            panel_attributes.depth, InputOutput, panel_attributes.visual,
+CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWEventMask, &wc);
+
+    Atom WM_TRANSIENT_FOR = XInternAtom(xdisplay, "WM_TRANSIENT_FOR", False);
+    Atom WINDOW = XInternAtom(xdisplay, "WINDOW", False);
+    XChangeProperty(xdisplay, win_inter, WM_TRANSIENT_FOR, WINDOW, 32,
+PropModeReplace, &systray_win_id, 1);
+}
+#endif
+#if 1
+{
+XSetWindowAttributes wc;
+    wc.override_redirect = True;
+    wc.background_pixel = BlackPixelOfScreen(xscreen);
+    wc.border_pixel = BlackPixelOfScreen(xscreen);
+    wc.event_mask = ExposureMask;
+	wc.colormap = colormap;
+#if 0
+if(window_attributes.depth == 32) {
+    win_inter = XCreateWindow(xdisplay, RootWindowOfScreen (xscreen), 0, 0, 1, 1, 0,
+            window_attributes.depth, InputOutput, panel_attributes.visual,
+CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWEventMask, &wc);
+} else {
+#endif
+    win_inter = XCreateWindow(xdisplay, RootWindowOfScreen (xscreen), 0, 0, 16, 16, 0,
+            panel_attributes.depth, InputOutput, panel_attributes.visual,
+CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWEventMask|CWColormap, &wc);
+printf("%d\n",__LINE__);
+	/*** GRRRR ***/
+    Atom WM_TRANSIENT_FOR = XInternAtom(xdisplay, "WM_TRANSIENT_FOR", False);
+    Atom WINDOW = XInternAtom(xdisplay, "WINDOW", False);
+printf("%d\n",__LINE__);
+    XChangeProperty(xdisplay, win_inter, WM_TRANSIENT_FOR, WINDOW, 32,
+PropModeReplace, &systray_win_id, 1);
+}
+#endif
+
+
+{
+ int red_prec, green_prec, blue_prec, depth;
+  GdkVisual *visual;
+  visual = gdk_x11_screen_lookup_visual (screen,
+                                         window_attributes.visual->visualid);
+
+  gdk_visual_get_red_pixel_details (visual, NULL, NULL, &red_prec);
+  gdk_visual_get_green_pixel_details (visual, NULL, NULL, &green_prec);
+  gdk_visual_get_blue_pixel_details (visual, NULL, NULL, &blue_prec);
+  depth = gdk_visual_get_depth (visual);
+
+  int visual_has_alpha = red_prec + blue_prec + green_prec < depth;
+
+	printf("visual_has_alpha: %d\n",visual_has_alpha);
+}
+
+#if 0
+{
+
+	GdkWindow * wininter = gdk_x11_window_foreign_new_for_display(display, win_inter);
+#if 0
+	cairo_t * cr = gdk_cairo_create (wininter);
+ 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+ 	cairo_set_source_rgba(cr, 1, 0, 1, 1);
+ 	cairo_paint(cr);
+	cairo_destroy(cr);    
+#endif
+	printf("%d\n",__LINE__);
+	gdk_window_add_filter(wininter, &call_python_filter_inter, (gpointer)panel);
+}
+#endif
+
+//XSetWindowBackground(GDK_DISPLAY_XDISPLAY (display), win_inter, 0);
+
 	printf("OO: %d %d\n",win_id, systray_win_id);
    
 	XUnmapWindow(GDK_DISPLAY_XDISPLAY (display),  win_id);
-
+printf("%d\n",__LINE__);
+	    
 	//printf("%d\n",__LINE__);
 	//XResizeWindow(GDK_DISPLAY_XDISPLAY (display),  win_id, 1, 1);
 	//printf("%d\n",__LINE__);
-	XSetWindowBackground(GDK_DISPLAY_XDISPLAY (display), win_id, 0);
+	//XSetWindowBackground(GDK_DISPLAY_XDISPLAY (display), win_id, 0);
 printf("%d\n",__LINE__);
 	    
-XSelectInput(GDK_DISPLAY_XDISPLAY (display), win_id, StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask);
+	XSelectInput(GDK_DISPLAY_XDISPLAY (display), win_id, StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask);
 	printf("%d\n",__LINE__);
-	XReparentWindow(GDK_DISPLAY_XDISPLAY (display), win_id, systray_win_id, 0, 0);
+	XReparentWindow(GDK_DISPLAY_XDISPLAY (display), win_id, win_inter, 0, 0);
 
-	printf("%d\n",__LINE__);
-	gdk_window_add_filter(win_sub, &call_python_filter, (gpointer)panel);
 
 ///g_object_unref(win_sub) ???
 	printf("%d\n",__LINE__);
@@ -663,7 +940,14 @@ XSelectInput(GDK_DISPLAY_XDISPLAY (display), win_id, StructureNotifyMask | Prope
 	printf("%d\n",__LINE__);
 	xembed_send(display, win_id, XEMBED_FOCUS_IN, XEMBED_FOCUS_CURRENT, 0, 0);
 		printf("%d\n",__LINE__);
-	Py_RETURN_NONE;
+	gdk_window_add_filter(win_sub, &call_python_filter, (gpointer)panel);
+	printf("%d\n",__LINE__);
+
+
+//gdk_window_set_background_pattern (window, NULL);
+
+	//Py_RETURN_NONE;
+	return Py_BuildValue("l", win_inter);
 }
 
 #define TPL_FUNCTION(name) {#name, py_##name, METH_VARARGS, "Not documented"}
@@ -675,9 +959,11 @@ static PyMethodDef methods[] =
 	TPL_FUNCTION_DOC(print_type, "Print the type of a GObject"),
 	TPL_FUNCTION_DOC(set_strut, "set _NET_WM_STRUT"),
 	TPL_FUNCTION_DOC(dock_tray, "dock tray"),
+	TPL_FUNCTION_DOC(undock_tray, "undock tray"),
 	TPL_FUNCTION_DOC(move_tray, "move tray "),
 	TPL_FUNCTION_DOC(set_system_tray_filter, "implement X11 event filtering"),
 	TPL_FUNCTION_DOC(set_system_tray_orientation, "set _NET_SYSTEM_TRAY_ORIENTATION"),
+	TPL_FUNCTION_DOC(set_system_tray_visual, "set _NET_SYSTEM_TRAY_VISUAL"),
 	{NULL, NULL, 0, NULL} // sentinel
 };
 
@@ -718,11 +1004,6 @@ PyInit_PageLauncherHook(void)
 	((struct module_state*)PyModule_GetState(m))->Error = PyErr_NewException("PageLauncherHook.error", NULL, NULL);
 	Py_INCREF(((struct module_state*)PyModule_GetState(m))->Error);
 	PyModule_AddObject(m, "error", ((struct module_state*)PyModule_GetState(m))->Error);
-
-        
-	/** init numpy **/
-	//import_array();
-
 	return m;
 
 }

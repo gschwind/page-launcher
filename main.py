@@ -964,9 +964,14 @@ class PanelTray(Clutter.Group):
 		self.panel = panel
 		self.icon_size_x = ico_size
 		self.icon_size_y = ico_size/2
+
+		self.sz_x_ico = 24
+		self.sz_y_ico = 24
+		
+		self.margin_ico_y = 5
 		self.sub_offset = 2
 		self.window = panel.window
-		self.dock_list = []
+		self.dock_list = {}
 		#self.sub_icon_size = ico_size*margin
 		#self.sub_offset = (self.icon_size-self.sub_icon_size)/2
 		#self.text = Clutter.Text.new_full(font_clock, u"12:30",color_clock)
@@ -976,7 +981,7 @@ class PanelTray(Clutter.Group):
 		self.icon_back = ItemMenu()
 		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
 		self.icon_back.set_position(0,0)
-		self.icon_back.set_color(Clutter.Color.new(0,0,0,255))
+		self.icon_back.set_color(Clutter.Color.new(1,0,0,255))
 
 		self.add_child(self.icon_back)
 		#self.add_child(self.text)
@@ -1010,27 +1015,43 @@ class PanelTray(Clutter.Group):
 			else:
 				print("Owner is ok")	
 						
-			PageLauncherHook.set_system_tray_orientation(self.window, True)
+			PageLauncherHook.set_system_tray_orientation(self.window, True)	
+			PageLauncherHook.set_system_tray_visual(self.window, display)
 			PageLauncherHook.set_system_tray_filter(self.window,display, self)
 			#self.window.add_filter(self.toto)
 
 
 	def get_size_y(self):
-		return len(self.dock_list)*(32+1)+4
+		sz = int(ceil(len(self.dock_list)/2)*(self.sz_y_ico+self.margin_ico_y)+self.margin_ico_y)
+		return sz 
+
+	def update_pos_x(self, nb_trays):
+		self.margin_ico_x = (self.icon_size_x-nb_trays*self.sz_x_ico)/(nb_trays+1)
+		pos_x = [self.margin_ico_x]
+		tmp_x = self.margin_ico_x
+		
+		for ind in range(nb_trays):
+			tmp_x = tmp_x + self.margin_ico_x + self.sz_x_ico
+			pos_x.append(tmp_x)
+
+		print(pos_x)
+		return pos_x
 
 	def set_position(self,x, y):
 		super().set_position(x,y)
 		self.icon_back.set_height(self.get_size_y())
 		
-		sz_x_ico = 32
-		sz_y_ico = 32
+		
 		ind = 0
-		tmp_y = 2
-		x_off = (self.icon_size_x-sz_x_ico)/2
-		print(x_off)
-		for win_id in self.dock_list:
-			PageLauncherHook.move_tray(self.window, ClutterGdk.get_default_display(), win_id, int(x_off), int(tmp_y+y), sz_x_ico, sz_y_ico)
-			tmp_y = tmp_y + sz_y_ico + 1
+		tmp_y = self.margin_ico_y
+		pos_x = self.update_pos_x(min(len(self.dock_list)-ind,2))
+		for win_id, win_inter in self.dock_list.items():
+			
+			PageLauncherHook.move_tray(self.window, ClutterGdk.get_default_display(), win_id, win_inter, int(pos_x[int(ind)&1]+self.sub_offset), int(tmp_y+y), self.sz_x_ico, self.sz_y_ico)
+			if int(ind)&1 == 1:
+				tmp_y = tmp_y + self.sz_y_ico + self.margin_ico_y
+				pos_x = self.update_pos_x(min(len(self.dock_list)-ind-1,2))
+			ind+= 1
 			
 
 
@@ -1038,15 +1059,17 @@ class PanelTray(Clutter.Group):
 		print('undock request')
 		print(socket_id)
 		print(window)
-		self.dock_list.remove(socket_id)
+		win_inter = self.dock_list[socket_id]
+		PageLauncherHook.undock_tray(self.window, ClutterGdk.get_default_display(), socket_id, win_inter)
+		del self.dock_list[socket_id]
 
 	def dock_request(self, socket_id, window):
 		print('dock request')
 		print(socket_id)
 		print(window)
 
-		PageLauncherHook.dock_tray(self.window, ClutterGdk.get_default_display(), socket_id)
-		self.dock_list.append(socket_id)
+		win_inter = PageLauncherHook.dock_tray(self.window, ClutterGdk.get_default_display(), socket_id)
+		self.dock_list[socket_id] = win_inter
 		#socket = Gtk.Socket()
 		#socket.connect("plug-added", lambda s: s.set_size_request(16, 16))
 		#socket.connect("plug-removed", lambda s: s.set_size_request(-1, -1))
