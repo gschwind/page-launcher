@@ -426,8 +426,6 @@ PyObject * func = PyObject_GetAttrString(manager, "undock_request");
 		}
 
 
-
-
 	PyObject* args = Py_BuildValue("(i,i)",xevent->event, GINT_TO_POINTER (xevent->window));	
  	PyObject_CallObject(func, args);
 	Py_DECREF(args);
@@ -439,7 +437,7 @@ static GdkFilterReturn call_python_filter_inter (GdkXEvent *gdkxevent, GdkEvent 
 	PyObject *manager = data;
 	GdkFilterReturn retval = GDK_FILTER_CONTINUE;
 
-printf("%s\n",__FUNCTION__);
+//printf("%s\n",__FUNCTION__);
 
 	if (xevent->type == Expose) {
 		XExposeEvent * xexposeevent = (XExposeEvent *) xevent; 
@@ -484,7 +482,7 @@ static GdkFilterReturn call_python_filter (GdkXEvent *gdkxevent, GdkEvent *event
   	PyGILState_STATE gstate;
 	gstate = PyGILState_Ensure();
 
-printf("%s\n",__FUNCTION__);
+//printf("%s\n",__FUNCTION__);
 
   if (xevent->type == ClientMessage)
     {
@@ -524,6 +522,17 @@ printf("%s\n",__FUNCTION__);
   return retval;
 }
 
+static
+int
+error_handler(Display *display, XErrorEvent *error) {
+  char buffer[500];
+
+  XGetErrorText(display, error->error_code, buffer, sizeof(buffer));
+  printf("%d:%s\n",error->error_code, buffer);
+
+  return 0;
+}
+
 static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
 	PyObject * pyobj_win; // the GdkWindow
 	PyObject * pyobj_display; // the GdkWindow
@@ -553,6 +562,8 @@ static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
 
 	GdkAtom selection_atom = gdk_atom_intern (selection_atom_name, FALSE);
 	g_free (selection_atom_name);
+
+	XSetErrorHandler(error_handler);
 	
 	/* Update Tray Manager */
 	{
@@ -803,7 +814,7 @@ printf("%d\n",__LINE__);
 	XGetWindowAttributes(xdisplay, win_id, &window_attributes);
 
 	    
-printf("%d %d depth:%d panel:%d\n",__LINE__, win_id, window_attributes.depth, panel_attributes.depth);
+printf("DOCKING TRAY - %d %d depth:%d panel:%d\n",__LINE__, win_id, window_attributes.depth, panel_attributes.depth);
 Window win_inter;
 
 Colormap colormap = XCreateColormap(
@@ -868,7 +879,7 @@ if(window_attributes.depth == 32) {
 CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWEventMask, &wc);
 } else {
 #endif
-    win_inter = XCreateWindow(xdisplay, RootWindowOfScreen (xscreen), 0, 0, 16, 16, 0,
+    win_inter = XCreateWindow(xdisplay, RootWindowOfScreen (xscreen), 0, 0, 1, 1, 0,
             panel_attributes.depth, InputOutput, panel_attributes.visual,
 CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWEventMask|CWColormap, &wc);
 printf("%d\n",__LINE__);
@@ -915,32 +926,31 @@ PropModeReplace, &systray_win_id, 1);
 #endif
 
 //XSetWindowBackground(GDK_DISPLAY_XDISPLAY (display), win_inter, 0);
-
 	printf("OO: %d %d\n",win_id, systray_win_id);
-   
 	XUnmapWindow(GDK_DISPLAY_XDISPLAY (display),  win_id);
-printf("%d\n",__LINE__);
+	printf("%d\n",__LINE__);
 	    
-	//printf("%d\n",__LINE__);
+	printf("%d\n",__LINE__);
 	//XResizeWindow(GDK_DISPLAY_XDISPLAY (display),  win_id, 1, 1);
-	//printf("%d\n",__LINE__);
+	printf("%d\n",__LINE__);
 	//XSetWindowBackground(GDK_DISPLAY_XDISPLAY (display), win_id, 0);
-printf("%d\n",__LINE__);
-	    
+	printf("%d\n",__LINE__);
 	XSelectInput(GDK_DISPLAY_XDISPLAY (display), win_id, StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask);
 	printf("%d\n",__LINE__);
 	XReparentWindow(GDK_DISPLAY_XDISPLAY (display), win_id, win_inter, 0, 0);
+	printf("%d\n",__LINE__);	    
+	gdk_window_add_filter(win_sub, &call_python_filter, (gpointer)panel);
 
+	XMapWindow(xdisplay,  win_id);
+	XMapWindow(xdisplay, win_inter); 
 
 ///g_object_unref(win_sub) ???
 	printf("%d\n",__LINE__);
-	xembed_send(display, win_id, XEMBED_EMBEDDED_NOTIFY, 0, systray_win_id, 0);
+	xembed_send(display, win_id, XEMBED_EMBEDDED_NOTIFY, 0, systray_win_id, 1);
 	printf("%d\n",__LINE__);
 	xembed_send(display, win_id, XEMBED_WINDOW_ACTIVATE, 0, 0, 0);
 	printf("%d\n",__LINE__);
 	xembed_send(display, win_id, XEMBED_FOCUS_IN, XEMBED_FOCUS_CURRENT, 0, 0);
-		printf("%d\n",__LINE__);
-	gdk_window_add_filter(win_sub, &call_python_filter, (gpointer)panel);
 	printf("%d\n",__LINE__);
 
 

@@ -802,7 +802,7 @@ color_clock)
 
 class PanelApps(PanelIcon):
 	def __init__(self, panel, ico_size):
-		super().__init__(panel,  Clutter.Texture.new_from_file("./data/open.svg"), ico_size, 48)
+		super().__init__(panel,  Clutter.Texture.new_from_file("./data/app.svg"), ico_size, 48)
 		
 	
 	def button_press_handler(self, widget, event):
@@ -840,9 +840,31 @@ class PanelGroupApp(PanelIcon):
 
 		super().__init__(panel, icon, ico_size, 48)
 		
+		self.arrows = [Clutter.Texture.new_from_file("./data/launcher_arrow_ltr_19.svg"),
+				Clutter.Texture.new_from_file("./data/launcher_arrow_ltr_19.svg"),
+				Clutter.Texture.new_from_file("./data/launcher_arrow_ltr_19.svg")]
+		
+		for arrow in self.arrows: 
+			self.insert_child_above(arrow, self.icon_back)
+			arrow.set_y(self.icon_size_x/2-arrow.get_height()/2)
+			arrow.hide()
 		#self.icon_text = Clutter.Text.new_full(font_menu_entry, "", Clutter.Color.new(255,255,255,255))
 		#self.add_child(self.icon_text)
 
+	def update_arrows(self):
+		ind = 0
+		margin = -10
+		nb_app = min(len(self.app_list),3)
+		for arrow in self.arrows:
+				if ind < nb_app:
+					arrow.set_y(self.icon_size_x/2-(nb_app*arrow.get_height()+(nb_app-1)*margin)/2 + ind*(arrow.get_height()+margin) )
+					arrow.show()
+				else:
+					print
+					arrow.hide()
+				ind = ind + 1
+				print(ind)
+				print("nb_app:"+str(nb_app))
 	def set_background(self, px1_ico):
 		self.icon_1px = px1_ico
 		self.icon_1px.set_size(self.icon_size_x,self.icon_size_x)
@@ -870,6 +892,7 @@ class PanelGroupApp(PanelIcon):
 
 	def set_position(self,x, y):
 		super().set_position(x,y)
+		self.update_arrows()
 		if self.icon_1px:
 			self.icon_1px.set_position(0,0)
 		#self.icon_text.set_text(str(len(self.app_list)))
@@ -1034,7 +1057,7 @@ class PanelTray(Clutter.Group):
 			tmp_x = tmp_x + self.margin_ico_x + self.sz_x_ico
 			pos_x.append(tmp_x)
 
-		print(pos_x)
+		#print(pos_x)
 		return pos_x
 
 	def set_position(self,x, y):
@@ -1374,11 +1397,13 @@ class PanelView(Clutter.Stage):
 			#	pprint.pprint(r)
 	
 		
-		
+		self.update_icons_pos()
+
 		#print('=====')
 		#for grp in self.list_group_apps:
 		#	print(grp)
 
+	def update_icons_pos(self):	
 		# Update icon position
 		pos_y = self.pos_offset
 		for grp in self.list_group_apps:
@@ -1490,7 +1515,7 @@ class PanelView(Clutter.Stage):
 ####
 
 def dbus_mate(bus):
-	bus_object = bus.get_object("org.mate.sessionmanager", "/org/mate/SessionManager")
+	bus_object = bus.get_object("org.mate.SessionManager", "/org/mate/SessionManager")
 	iface = dbus.Interface(bus_object, 'org.mate.SessionManager')
 	return iface
 def dbus_login1(bus):
@@ -1573,13 +1598,15 @@ class Reboot():
 			else:
 				raise Exception("'org.freedesktop.Consolekit' somehow doesn't work.")
 class Logout():
+	#dbus-send --session --type=method_call --print-reply --dest=org.gnome.SessionManager /org/gnome/SessionManager org.gnome.SessionManager.Logout uint32:1
 	def activate(self, event_time):
 		bus = dbus.SystemBus()
 		try:
 			i= dbus_mate(bus)
-			print("lock")
+			print("logout")
 			i.Logout(1)
 		except:
+			os.system("dbus-send --session --type=method_call --print-reply --dest=org.mate.SessionManager /org/mate/SessionManager org.mate.SessionManager.Logout uint32:1")
 			raise Exception("logout somehow doesn't work.")
 
 class Lock():
@@ -1587,7 +1614,7 @@ class Lock():
 		bus = dbus.SystemBus()
 		try:
 			i= dbus_lightdm(bus)
-			print("switch")
+			print("lock")
 			i.SwitchToGreeter(0)
 		except:
 			raise Exception("lock somehow doesn't work.")
