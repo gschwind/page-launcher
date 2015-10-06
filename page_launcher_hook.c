@@ -173,42 +173,11 @@ static PyObject * py_set_system_tray_visual(PyObject * self, PyObject * args) {
 	Py_RETURN_NONE;
 }
 
-
-#if 0
-static GdkFilterReturn call_python_filter (GdkXEvent *gdkxevent, GdkEvent *event, gpointer data) {
-	int retval;
-  	PyGILState_STATE gstate;
-	gstate = PyGILState_Ensure();
-	 XEvent        *xevent = (XEvent *)gdkxevent;
-
-	PyObject * panel = (PyObject*)data;
-	PyObject * func = PyObject_GetAttrString(panel, "tray_filter"); 
-	//PyObject * func_opcode = PyObject_GetAttrString(myobject, "tray_filter_opcode"); 
-	//PyObject * func_message_data = PyObject_GetAttrString(myobject, "tray_filter_message_data"); 
-
-	if (!PyCallable_Check(func)) {
-		PyErr_SetString(PyExc_TypeError, "parameter tray_filter be callable");
-		return GDK_FILTER_CONTINUE;
-	}
-
-	PyObject *py_event = pyg_boxed_new(GDK_TYPE_EVENT, event, FALSE, FALSE);
-	PyObject* args = Py_BuildValue("(O)",py_event);	
- 	PyObject* result = PyObject_CallObject(func, args);
-	Py_DECREF(args);
-	Py_DECREF(py_event);
-
-
-   	 PyGILState_Release(gstate);
-#endif
-
-
-
 static void
 tray_manager_handle_dock_request (PyObject       *manager,
 				      XClientMessageEvent  *xevent)
 {
-printf("%s\n",__FUNCTION__);
-
+//printf("%s\n",__FUNCTION__);
 PyObject * func = PyObject_GetAttrString(manager, "dock_request");
 	if(!func) {
 		PyErr_SetString(PyExc_TypeError, "dock_request callback does not exist");
@@ -226,45 +195,13 @@ PyObject * func = PyObject_GetAttrString(manager, "dock_request");
 	PyObject* args = Py_BuildValue("(i,i)",xevent->data.l[2], GINT_TO_POINTER (xevent->window));	
  	PyObject_CallObject(func, args);
 	Py_DECREF(args);
-#if  0
-  GtkWidget *socket;
-  Window *window;
-  
-  socket = gtk_socket_new ();
-  
-  /* We need to set the child window here
-   * so that the client can call _get functions
-   * in the signal handler
-   */
-  window = g_new (Window, 1);
-  *window = xevent->data.l[2];
-      
-  g_object_set_data_full (G_OBJECT (socket),
-			  "egg-tray-child-window",
-			  window, g_free);
-  g_signal_emit (manager, manager_signals[TRAY_ICON_ADDED], 0,
-		 socket);
-
-  /* Add the socket only if it's been attached */
-  if (GTK_IS_WINDOW (gtk_widget_get_toplevel (GTK_WIDGET (socket))))
-    {
-      g_signal_connect (socket, "plug_removed",
-			G_CALLBACK (egg_tray_manager_plug_removed), manager);
-      
-      gtk_socket_add_id (GTK_SOCKET (socket), xevent->data.l[2]);
-
-      g_hash_table_insert (manager->socket_table, GINT_TO_POINTER (xevent->data.l[2]), socket);
-    }
-  else
-    gtk_widget_destroy (socket);
-#endif
 }
 
 static void
 tray_manager_handle_message_data (PyObject       *manager,
 				       XClientMessageEvent  *xevent)
 {
-printf("%s\n",__FUNCTION__);
+printf("FIXME %s\n",__FUNCTION__);
 #if 0
   GList *p;
   int len;
@@ -312,7 +249,7 @@ static void
 tray_manager_handle_begin_message (PyObject       *manager,
 				       XClientMessageEvent  *xevent)
 {
-printf("%s\n",__FUNCTION__);
+printf("FIXME %s\n",__FUNCTION__);
 #if 0
   GList *p;
   PendingMessage *msg;
@@ -514,7 +451,7 @@ static GdkFilterReturn call_python_filter (GdkXEvent *gdkxevent, GdkEvent *event
       tray_undock (manager, (XDestroyWindowEvent *)xevent);
     }
 	else {
-	printf("Not handled %d\n",xevent->type);
+	//printf("Not handled %d\n",xevent->type);
 }
  
 
@@ -823,48 +760,6 @@ Colormap colormap = XCreateColormap(
             panel_attributes.visual, AllocNone );
 	printf("%d\n",__LINE__);
 
-#if 0
-{
-	XSetWindowAttributes pattr;
-	pattr.override_redirect = False;
-	pattr.background_pixel = XBlackPixelOfScreen(xscreen);
-	pattr.border_pixel = XBlackPixelOfScreen(xscreen);
-	pattr.event_mask = StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask;//ButtonPressMask|ExposureMask|EnterWindowMask;
-	pattr.colormap = colormap;
-	win_inter = XCreateWindow(xdisplay, systray_win_id, 0, 0, 16, 16,1, panel_attributes.depth, CopyFromParent, panel_attributes.visual, CWBackPixel|CWBorderPixel|CWEventMask|CWColormap, &pattr);
-	printf("%d\n",__LINE__);
-}
-#endif
-#if 0
-if(window_attributes.depth == 32) {
-	XSetWindowAttributes pattr;
-	pattr.override_redirect = False;
-	pattr.background_pixel = XBlackPixelOfScreen(xscreen);
-	pattr.border_pixel = XBlackPixelOfScreen(xscreen);
-	pattr.event_mask = StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask;//ButtonPressMask|ExposureMask|EnterWindowMask;
-	win_inter = XCreateWindow(xdisplay, systray_win_id, 0, 0, 16, 16,1, window_attributes.depth, CopyFromParent, panel_attributes.visual, CWBackPixel|CWBorderPixel|CWEventMask, &pattr);
-printf("%d\n",__LINE__);
-} else
-#endif 
-#if 0
-{
- 	XSetWindowAttributes wc;
-    wc.override_redirect = True;
-    wc.background_pixel = BlackPixelOfScreen(xscreen);
-    wc.border_pixel = BlackPixelOfScreen(xscreen);
-    wc.event_mask = /* SOME EVENT MASK */0;
-	//wc.colormap = colormap;
-    win_inter = XCreateWindow(xdisplay, RootWindowOfScreen (xscreen), 0, 0, 100, 100, 0,
-            panel_attributes.depth, InputOutput, panel_attributes.visual,
-CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWEventMask, &wc);
-
-    Atom WM_TRANSIENT_FOR = XInternAtom(xdisplay, "WM_TRANSIENT_FOR", False);
-    Atom WINDOW = XInternAtom(xdisplay, "WINDOW", False);
-    XChangeProperty(xdisplay, win_inter, WM_TRANSIENT_FOR, WINDOW, 32,
-PropModeReplace, &systray_win_id, 1);
-}
-#endif
-#if 1
 {
 XSetWindowAttributes wc;
     wc.override_redirect = True;
@@ -872,13 +767,7 @@ XSetWindowAttributes wc;
     wc.border_pixel = BlackPixelOfScreen(xscreen);
     wc.event_mask = ExposureMask;
 	wc.colormap = colormap;
-#if 0
-if(window_attributes.depth == 32) {
-    win_inter = XCreateWindow(xdisplay, RootWindowOfScreen (xscreen), 0, 0, 1, 1, 0,
-            window_attributes.depth, InputOutput, panel_attributes.visual,
-CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWEventMask, &wc);
-} else {
-#endif
+
     win_inter = XCreateWindow(xdisplay, RootWindowOfScreen (xscreen), 0, 0, 1, 1, 0,
             panel_attributes.depth, InputOutput, panel_attributes.visual,
 CWOverrideRedirect|CWBackPixel|CWBorderPixel|CWEventMask|CWColormap, &wc);
@@ -890,8 +779,6 @@ printf("%d\n",__LINE__);
     XChangeProperty(xdisplay, win_inter, WM_TRANSIENT_FOR, WINDOW, 32,
 PropModeReplace, &systray_win_id, 1);
 }
-#endif
-
 
 {
  int red_prec, green_prec, blue_prec, depth;
@@ -909,31 +796,11 @@ PropModeReplace, &systray_win_id, 1);
 	printf("visual_has_alpha: %d\n",visual_has_alpha);
 }
 
-#if 0
-{
 
-	GdkWindow * wininter = gdk_x11_window_foreign_new_for_display(display, win_inter);
-#if 0
-	cairo_t * cr = gdk_cairo_create (wininter);
- 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
- 	cairo_set_source_rgba(cr, 1, 0, 1, 1);
- 	cairo_paint(cr);
-	cairo_destroy(cr);    
-#endif
-	printf("%d\n",__LINE__);
-	gdk_window_add_filter(wininter, &call_python_filter_inter, (gpointer)panel);
-}
-#endif
-
-//XSetWindowBackground(GDK_DISPLAY_XDISPLAY (display), win_inter, 0);
 	printf("OO: %d %d\n",win_id, systray_win_id);
 	XUnmapWindow(GDK_DISPLAY_XDISPLAY (display),  win_id);
 	printf("%d\n",__LINE__);
 	    
-	printf("%d\n",__LINE__);
-	//XResizeWindow(GDK_DISPLAY_XDISPLAY (display),  win_id, 1, 1);
-	printf("%d\n",__LINE__);
-	//XSetWindowBackground(GDK_DISPLAY_XDISPLAY (display), win_id, 0);
 	printf("%d\n",__LINE__);
 	XSelectInput(GDK_DISPLAY_XDISPLAY (display), win_id, StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask);
 	printf("%d\n",__LINE__);

@@ -306,6 +306,9 @@ class DBusWidget(dbus.service.Object):
 class SubWindow(Clutter.Stage):
 	def __init__(self, parent, x, y, width, height):
 		super().__init__()
+		display = ClutterGdk.get_default_display()
+		self.root_height = display.get_default_screen().get_root_window().get_height()
+		self.root_width = display.get_default_screen().get_root_window().get_width()
 		self.is_grab = False
 		self._create_menu_window(x, y, width, height)
 		ClutterGdk.set_stage_foreign(self, self.window)
@@ -393,12 +396,10 @@ class Slide(SubWindow):
 	def __init__(self, parent, offset_x, size_x):
 		self.parent = parent
 		display = ClutterGdk.get_default_display()
-		self.root_height = display.get_default_screen().get_root_window().get_height()
-		print(size_x)
-		print(self.root_height)
-		super().__init__(parent, offset_x, 0, size_x, self.root_height)
-
-
+		root_height = display.get_default_screen().get_root_window().get_height()
+		root_width = display.get_default_screen().get_root_window().get_width()
+		super().__init__(parent, offset_x, 0, size_x, root_height)
+		
 	def show(self, event_time):
 		print("Slide.show: Dash show")
 		parent_window = ClutterGdk.get_stage_window(self.parent)
@@ -406,13 +407,13 @@ class Slide(SubWindow):
 		self.reset()
 		super().show()
 		self.window.focus(event_time)
-		self.set_move(0)
+		self.set_move(self.pos_x_show)
 		
 
 
 class DashSlide(Slide):
-	def __init__(self, parent, offset_x):
-		self.slide_size = 300
+	def __init__(self, parent, offset_x, ico_size, slide_size):
+		self.slide_size = slide_size
 		super().__init__(parent, offset_x, self.slide_size)
 
 		self.margin_x = 10
@@ -421,10 +422,17 @@ class DashSlide(Slide):
 		self.y_offset = self.text_size + 2*self.margin
 		self.item_size_x = self.slide_size
 		self.item_size_y = 64
-		self.ico_size = 48
+		self.ico_size = ico_size
 
 		self.rect = Clutter.Actor()
-		self.rect.set_x(-self.slide_size)
+		if parent.side == 'left':
+			self.pos_x_hide = -self.slide_size
+			self.pos_x_show = 0
+		else:
+			self.pos_x_hide = self.slide_size
+			self.pos_x_show = 0
+
+		self.rect.set_x(self.pos_x_hide)
 		self.rect.set_y(0)
 		self.rect.set_size(self.slide_size,self.root_height)
 		self.rect.set_background_color(Clutter.Color.new(32,32,32,240))	
@@ -484,7 +492,7 @@ Clutter.Color.new(255,255,255,128))
 
 	def reset(self):
 		self.rect.restore_easing_state();
-		self.rect.set_x(-self.slide_size)
+		self.rect.set_x(self.pos_x_hide)
 		self.rect.save_easing_state();
 
 	def set_move(self, x):
@@ -595,17 +603,13 @@ Clutter.Color.new(255,255,255,128))
 		
 class PanelMenu(SubWindow):
 	def __init__(self, parent):
-		super().__init__(parent, 0, 0, 100, 100)
-		
+		super().__init__(parent, 0, 0, 100, 100)		
 		self.is_grab = False
 		self.item_height = 31
 		self.item_margin_y = 2
 		self.item_margin_x = 20
 		self.global_width = 0
 		self.global_height = 0
-		#self.connect("deactivate", PanelMenu.event_menu_focus_out, self)
-		#elf.container = Clutter.Group()
-			
 
 	def event_menu_button_press(widget, event, self,  menu):
 		print('PANEL KEYPRESS')
@@ -620,7 +624,7 @@ class PanelMenu(SubWindow):
 		print('FOCUS OUT')
 		pass
 
-	def show_menu(self, x, y, menulist, event_time):
+	def show_menu(self, x, y, menulist, event_time, halign_right):
 		print('PanelMenu.show_menu: SHOW MENU')
 		self.set_x(0)
 		self.set_y(0)
@@ -673,8 +677,10 @@ class PanelMenu(SubWindow):
 			y=self.root_height-self.global_height
 		
 		self.window.resize(self.global_width, self.global_height)
-		self.window.move(x,y)
-
+		if halign_right:
+			self.window.move(x,y)
+		else:
+			self.window.move(x-self.global_width,y)
 
 		self.set_size(self.global_width, self.global_height)	
 		self.rect.set_size(self.global_width, self.global_height)	
@@ -748,13 +754,11 @@ class PanelIcon(Clutter.Group):
 		self.icon_back = ItemMenu()
 		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
 		self.icon_back.set_reactive(True)
-		
+		self.icon_back.connect("button-press-event", self.button_press_handler)		
+		self.icon_back.connect("button-release-event", self.button_release_handler)
 
-		self.icon_back.connect("button-press-event", self.button_press_handler)
-		
 		self.icon.set_position(self.sub_offset,self.sub_offset)
 		self.icon_back.set_position(0,0)
-
 
 		self.add_child(self.icon_back)
 		self.add_child(self.icon)
@@ -766,6 +770,14 @@ class PanelIcon(Clutter.Group):
 	def get_size_y(self):
 		return self.icon_size_y
 
+	def button_release_handler(self, widget, event):
+		print("button_release_handler\n")
+		return True
+
+	#def motion_handler(self, widget, event):
+	#	print("motion_handler\n")
+	#	return True
+
 class PanelClock(Clutter.Group):
 	def __init__(self, panel, ico_size):
 		super().__init__()
@@ -775,13 +787,13 @@ class PanelClock(Clutter.Group):
 		self.sub_offset = 2
 		#self.sub_icon_size = ico_size*margin
 		#self.sub_offset = (self.icon_size-self.sub_icon_size)/2
-		self.text = Clutter.Text.new_full(font_clock, u"12:30",
+		self.text = Clutter.Text.new_full(font_clock, u"",
 color_clock)
 		#self.text.set_line_alignment(Pango.Alignment.CENTER)
 		#self.text.set_size(ico_size, ico_size/2)
+		#self.text.set_width(ico_size)
 
 		self.icon_back = ItemMenu()
-		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
 		self.icon_back.set_position(0,0)
 
 		self.add_child(self.icon_back)
@@ -795,23 +807,37 @@ color_clock)
 		super().set_position(x,y)
 		now = datetime.datetime.now()
 		self.text.set_text(now.strftime('%H:%M'))
-		self.sub_offset_x = (self.icon_size_x-self.text.get_width())/2
-		self.sub_offset_y = (self.icon_size_y-self.text.get_height())/2
+		
+		
+		if self.text.get_width() < self.icon_size_x:
+			self.sub_offset_x = (self.icon_size_x-self.text.get_width())/2
+			self.sub_offset_y = (self.icon_size_y-self.text.get_height())/2
+			#self.text.set_position(self.sub_offset_x,self.sub_offset_y)
+		else:
+			#if self.text.get_height() > self.icon_size_x:
+			#	self.text.set_text(now.strftime('%H:%M'))
+			self.icon_size_y = ceil(self.text.get_width()/32)*32
+			self.text.set_rotation(Clutter.RotateAxis.Z_AXIS,-90,0,0,0)
+			self.text.set_translation(0,self.text.get_width(),0)
+			self.sub_offset_y = (self.icon_size_y-self.text.get_width())/2
+			self.sub_offset_x = (self.icon_size_x-self.text.get_height())/2
+			print([self.text.get_width(),self.text.get_height(), self.sub_offset_x, self.sub_offset_y])
 		self.text.set_position(self.sub_offset_x,self.sub_offset_y)
-
+		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
 
 class PanelApps(PanelIcon):
 	def __init__(self, panel, ico_size):
-		super().__init__(panel,  Clutter.Texture.new_from_file("./data/app.svg"), ico_size, 48)
+		super().__init__(panel,  Clutter.Texture.new_from_file("./data/app.svg"), ico_size, 3*ico_size/4)
 		
 	
 	def button_press_handler(self, widget, event):
 		self.panel.sub_dash(event.time)
 		return True
 
+
 class PanelShutdown(PanelIcon):
 	def __init__(self, panel, ico_size):
-		super().__init__(panel,  Clutter.Texture.new_from_file("./data/shutdown.svg"), ico_size, 48)
+		super().__init__(panel,  Clutter.Texture.new_from_file("./data/shutdown.svg"), ico_size, 3*ico_size/4)
 		
 
 	def button_press_handler(self, widget, event):
@@ -835,10 +861,11 @@ class PanelGroupApp(PanelIcon):
 		self.locked = locked
 		self.icon_1px = None
 		self.cb_new_process = new_process
+		self.enabled = True
 		#self.icon_1px.set_depth(100)
 		
 
-		super().__init__(panel, icon, ico_size, 48)
+		super().__init__(panel, icon, ico_size, 3*ico_size/4)
 		
 		self.arrows = [Clutter.Texture.new_from_file("./data/launcher_arrow_ltr_19.svg"),
 				Clutter.Texture.new_from_file("./data/launcher_arrow_ltr_19.svg"),
@@ -846,14 +873,16 @@ class PanelGroupApp(PanelIcon):
 		
 		for arrow in self.arrows: 
 			self.insert_child_above(arrow, self.icon_back)
-			arrow.set_y(self.icon_size_x/2-arrow.get_height()/2)
+			arrow.set_size(ico_size/5,ico_size/5)
 			arrow.hide()
-		#self.icon_text = Clutter.Text.new_full(font_menu_entry, "", Clutter.Color.new(255,255,255,255))
+		self.arrow_size = self.arrows[0].get_height()
+		
+	#self.icon_text = Clutter.Text.new_full(font_menu_entry, "", Clutter.Color.new(255,255,255,255))
 		#self.add_child(self.icon_text)
 
 	def update_arrows(self):
 		ind = 0
-		margin = -10
+		margin = -1*self.arrow_size/3
 		nb_app = min(len(self.app_list),3)
 		for arrow in self.arrows:
 				if ind < nb_app:
@@ -863,8 +892,8 @@ class PanelGroupApp(PanelIcon):
 					print
 					arrow.hide()
 				ind = ind + 1
-				print(ind)
-				print("nb_app:"+str(nb_app))
+				#print(ind)
+				#print("nb_app:"+str(nb_app))
 	def set_background(self, px1_ico):
 		self.icon_1px = px1_ico
 		self.icon_1px.set_size(self.icon_size_x,self.icon_size_x)
@@ -934,8 +963,21 @@ class PanelGroupApp(PanelIcon):
 	def get_name(self):
 		return self.name
 
+
+	def set_enabled(self, value):
+		self.enabled = value
+	
 	def button_press_handler(self, widget, event):
 		print('PanelGroupApp.button_press_handler', event)
+		if event.button == 1:
+			self.sliding_icons = True
+			self.sliding_start = self.get_x()
+
+	def button_release_handler(self, widget, event):
+		print('PanelGroupApp.button_release_handler', event)
+		if not self.enabled:
+			return False
+
 		if event.button == 1:
 			if len(self.app_list) > 1:
 				menu_list = []
@@ -945,15 +987,15 @@ class PanelGroupApp(PanelIcon):
 					menu['obj'] = iapp
 					menu_list.append(menu)
 				self.panel.sub_menu(self.get_y(), menu_list, event.time)
-				return True
+				return False
 			elif len(self.app_list) == 1:
 				self.panel.sub_reset(event.time)
 				for k,iapp in self.app_list.items():
 					iapp.activate(event.time)
-					return True
+					return False
 			else:
 				self.process_new(event.time)
-				return True
+				return False
 		elif event.button == 3:
 			menu_list = []
 			if self.locked:
@@ -990,7 +1032,9 @@ class PanelTray(Clutter.Group):
 
 		self.sz_x_ico = 24
 		self.sz_y_ico = 24
-		
+
+		self.max_col = int(self.icon_size_x/32)
+		print(self.max_col)
 		self.margin_ico_y = 5
 		self.sub_offset = 2
 		self.window = panel.window
@@ -1011,6 +1055,7 @@ class PanelTray(Clutter.Group):
 
 		display = ClutterGdk.get_default_display()
 		root_height = display.get_default_screen().get_root_window().get_height()
+		root_width = display.get_default_screen().get_root_window().get_width()
 		
 		screen = Wnck.Screen.get_default()
 
@@ -1045,14 +1090,14 @@ class PanelTray(Clutter.Group):
 
 
 	def get_size_y(self):
-		sz = int(ceil(len(self.dock_list)/2)*(self.sz_y_ico+self.margin_ico_y)+self.margin_ico_y)
+		sz = int(ceil(len(self.dock_list)/self.max_col)*(self.sz_y_ico+self.margin_ico_y)+self.margin_ico_y)
 		return sz 
 
 	def update_pos_x(self, nb_trays):
 		self.margin_ico_x = (self.icon_size_x-nb_trays*self.sz_x_ico)/(nb_trays+1)
-		pos_x = [self.margin_ico_x]
-		tmp_x = self.margin_ico_x
-		
+		pos_x = [self.margin_ico_x+ self.panel.window.get_position()[0]]
+		tmp_x = pos_x[0] 
+
 		for ind in range(nb_trays):
 			tmp_x = tmp_x + self.margin_ico_x + self.sz_x_ico
 			pos_x.append(tmp_x)
@@ -1064,16 +1109,15 @@ class PanelTray(Clutter.Group):
 		super().set_position(x,y)
 		self.icon_back.set_height(self.get_size_y())
 		
-		
 		ind = 0
 		tmp_y = self.margin_ico_y
-		pos_x = self.update_pos_x(min(len(self.dock_list)-ind,2))
+		pos_x = self.update_pos_x(min(len(self.dock_list)-ind,self.max_col))
 		for win_id, win_inter in self.dock_list.items():
 			
-			PageLauncherHook.move_tray(self.window, ClutterGdk.get_default_display(), win_id, win_inter, int(pos_x[int(ind)&1]+self.sub_offset), int(tmp_y+y), self.sz_x_ico, self.sz_y_ico)
-			if int(ind)&1 == 1:
+			PageLauncherHook.move_tray(self.window, ClutterGdk.get_default_display(), win_id, win_inter, int(pos_x[ind%self.max_col]+self.sub_offset), int(tmp_y+y), self.sz_x_ico, self.sz_y_ico)
+			if ind%self.max_col == self.max_col-1:
 				tmp_y = tmp_y + self.sz_y_ico + self.margin_ico_y
-				pos_x = self.update_pos_x(min(len(self.dock_list)-ind-1,2))
+				pos_x = self.update_pos_x(min(len(self.dock_list)-ind-1,self.max_col))
 			ind+= 1
 			
 
@@ -1090,43 +1134,9 @@ class PanelTray(Clutter.Group):
 		print('dock request')
 		print(socket_id)
 		print(window)
-
 		win_inter = PageLauncherHook.dock_tray(self.window, ClutterGdk.get_default_display(), socket_id)
 		self.dock_list[socket_id] = win_inter
-		#socket = Gtk.Socket()
-		#socket.connect("plug-added", lambda s: s.set_size_request(16, 16))
-		#socket.connect("plug-removed", lambda s: s.set_size_request(-1, -1))
-		#socket = Gtk.ToggleButton("TOTO")
-		#socket.show()
-		#print('toto1')
-		#actor = Clutter.GtkClutterActor()
-		#actor = GtkClutter.Actor.new_with_contents(socket)
-		#print('toto1.0')
-		#widget = actor.get_widget()
-		#print('toto1.3')
-		#widget.add(socket)
-		#print('toto1.1')
-		#self.add_child(actor)
-		#print('toto2')		
-		#socket.add_id(socket_id)
-		#print('toto3')
-		#socket.show()
-		#print('toto23')	
-		#widget = actor.get_widget()
-		#print(widget)
-		#widget.add(socket)
-		# SYSTEM_TRAY_REQUEST_DOCK opcode = 0
-		#wnck_window = Wnck.Window.get(socket_id)
-		#gdk_window = Gdk.window_foreign_new(wnck_window.get_xid())
-#		dpy = ClutterGdk.get_default_display()
-#		obj = dpy.create_resource_object("window", socket_id)
-#                            obj.reparent(tray.window.id, 0, 0)   
-#                            obj.change_attributes(event_mask=(X.ExposureMask|X.StructureNotifyMask))
-#                            tray.tasks[task] = Obj(obj=obj, x=0, y=0, width=0, height=TRAY_I_HEIGHT)
-#                            tray.order.append(task)                            
-#                            self.updatePanel(root, win, panel)
-		#print('toto4')
-		
+
 	def message_begin(self, socket_id, window):
 		print('message begin')
 
@@ -1134,29 +1144,30 @@ class PanelTray(Clutter.Group):
 		print('message cancel')
 
 	def tray_filter(self,a):
-		print("toto")
-		print(a.type)
+		#print(a.type)
 		return Gdk.FilterReturn.CONTINUE
 		#print(b)
 
 		
 class PanelView(Clutter.Stage):
-	
-
 	def __init__(self):
 		super().__init__()
 
 		# Manualy create the window to setup properties before mapping the window		
-		self._create_panel_window()
-
 		self.ico_size = 64
 		self.margin = 2
+		self.side = 'left'
+
+		self.config_file =os.path.join(os.path.expanduser("~"),'.page-launcher.cfg')
+		self.config_read()
+		self.ico_size = max(32,self.ico_size)
 		self.panel_width = self.ico_size+2*self.margin
 
-		
+		self._create_panel_window()
 
 		display = ClutterGdk.get_default_display()
 		root_height = display.get_default_screen().get_root_window().get_height()
+		root_width = display.get_default_screen().get_root_window().get_width()
 
 		screen = Wnck.Screen.get_default()
 		screen.connect("active-window-changed", self.on_active_window_change)
@@ -1164,7 +1175,11 @@ class PanelView(Clutter.Stage):
 		ClutterGdk.set_stage_foreign(self, self.window)
 		self.window.set_type_hint(Gdk.WindowTypeHint.DOCK)
 		self.window.stick()
-		PageLauncherHook.set_strut(self.window, [self.panel_width, 0, 0, 0])
+		if self.side == 'left':
+			PageLauncherHook.set_strut(self.window, [self.panel_width, 0, 0, 0])
+		else:
+			PageLauncherHook.set_strut(self.window, [0, self.panel_width, 0, 0])
+		
 		self.set_size(self.panel_width,root_height)
 		self.set_user_resizable(False)
 		self.set_title("page-panel")
@@ -1172,13 +1187,22 @@ class PanelView(Clutter.Stage):
 		self.set_opacity(0)
 		self.set_color(Clutter.Color.new(0,0,0,0))
 		self.set_scale(1.0, 1.0)
+		print(self.window.get_position())
 
-		self.connect('button-press-event', PanelView.button_press_handler, self)
+		self.sliding_icons = False
+		self.sliding_start = 0
+		self.sliding_current = 0;
+		self.connect('button-press-event', self.button_press_handler)
+		self.connect('button-release-event', self.button_release_handler)
+		self.connect("motion-event", self.motion_handler)
 		# create dash view
 		#self.dash = DashView(self)
 		self.panel_menu = PanelMenu(self)
-		self.dash_slide = DashSlide(self, self.panel_width)
-		
+
+		if self.side == 'left':
+			self.dash_slide = DashSlide(self, self.panel_width, 48, 300)
+		else:
+			self.dash_slide = DashSlide(self, root_width-self.panel_width-300, 48, 300)
 
 		# Dictionnary of apps
 		self.dict_apps={}
@@ -1209,10 +1233,7 @@ class PanelView(Clutter.Stage):
 		self.wnck_screen = Wnck.Screen.get_default()
 
 	
-		self.config_file =os.path.join(os.path.expanduser("~"),'.page-launcher.cfg')
-	
-	
-		self.config_read()
+		self.config_init_apps()
 		self.update_current_apps()
 		self.show()
 
@@ -1227,15 +1248,25 @@ class PanelView(Clutter.Stage):
 				apps_locked_list.append(group.get_name())
 
 		config.set('Launcher','apps' , ','.join(apps_locked_list))
+		config.set('Launcher','side', self.side)
+		config.set('Launcher','width', str(self.ico_size))
+ 
 		# Writing our configuration file to 'example.cfg'
 		with open(self.config_file, 'w') as configfile:
 			config.write(configfile)
 
 	def config_read(self):
-		config = configparser.ConfigParser()
-		config.read(self.config_file)
-		if config.has_section('Launcher'):
-			apps_locked_list = config.get('Launcher','apps').split(',')
+		self.config = configparser.ConfigParser()
+		self.config.read(self.config_file)
+		if self.config.has_section('Launcher'):
+			if self.config.has_option('Launcher','width'):			
+				self.side = self.config.get('Launcher','side')
+			if self.config.has_option('Launcher','width'):
+				self.ico_size = int(self.config.get('Launcher','width'))
+
+	def config_init_apps(self):
+		if self.config.has_section('Launcher'):
+			apps_locked_list = self.config.get('Launcher','apps').split(',')
 			for group_name in apps_locked_list:
 				self.create_app(group_name, None, True)
 			
@@ -1266,7 +1297,7 @@ class PanelView(Clutter.Stage):
 		#if ico==None:
 		#	ico = self.find_ico(app.get_application().get_name())
 		if ico==None and pix_icon:
-			pix= pix_icon.scale_simple(64,64,GdkPixbuf.InterpType.HYPER)
+			pix= pix_icon.scale_simple(self.ico_size,self.ico_size,GdkPixbuf.InterpType.HYPER)
 			ico = Clutter.Texture.new()
 			data = pix.get_pixels()
 			width = pix.get_width ()
@@ -1396,32 +1427,80 @@ class PanelView(Clutter.Stage):
 			#for r in gc.get_referrers(grp):
 			#	pprint.pprint(r)
 	
+		self.update_sys_icons_pos()
+		if not self.sliding_icons:
+			self.update_apps_icons_pos(self.sliding_current)
 		
-		self.update_icons_pos()
 
 		#print('=====')
 		#for grp in self.list_group_apps:
 		#	print(grp)
 
-	def update_icons_pos(self):	
+	def update_apps_icons_pos(self, offset):	
 		# Update icon position
 		pos_y = self.pos_offset
+
 		for grp in self.list_group_apps:
-			grp.set_position(self.margin, pos_y+self.margin)
+			pos_tmp = pos_y+self.margin+offset
+			if pos_tmp < 0:
+				ico_offset = max(-pos_tmp, 0)
+				ico_opacity = max(0,min(255*((pos_tmp+self.ico_size)/self.ico_size),255))
+			elif pos_tmp > self.ico_sys_limit :				
+				ico_offset = min(self.ico_sys_limit-pos_tmp, 0)
+				ico_opacity = max(0,min(255*((self.ico_size-(pos_tmp-self.ico_sys_limit))/self.ico_size),255))
+			else:
+				ico_offset = 0
+				ico_opacity = 255
+			grp.set_opacity(ico_opacity)
+			grp.set_position(self.margin, pos_tmp+ico_offset)
+			if ico_opacity:
+				grp.show()
+			else:
+				grp.hide()
 			pos_y += self.ico_size+self.margin
 
+		print(self.sliding_current)
+		print(pos_y)
+		if self.ico_sys_limit > pos_y:
+				self.sliding_next = 0
+		else:
+				self.sliding_next = offset
+
+	def update_sys_icons_pos(self):	
 		# Update icon position
 		pos_y = self.get_height()-self.margin
 		for grp in self.list_sys_apps:
 			pos_y -= grp.get_size_y()+self.margin
-			#print(pos_y)			
 			grp.set_position(self.margin, pos_y+self.margin)
+		self.ico_sys_limit = pos_y-self.ico_size
 			
+	def motion_handler(self, widget, event):
+		if self.sliding_icons:
+			# Update icons position according to mouse pos
+			self.update_apps_icons_pos(self.sliding_current+event.y-self.sliding_start)
+			# Disable press action of apps 
+			for grp in self.list_group_apps:
+				grp.set_enabled(False)
+		pass
 
-	def button_press_handler(self, event, data = None):
+
+	def button_release_handler(self, widget, event):		
+		self.sliding_current = min(self.sliding_next,0)
+		self.sliding_icons = False
+		self.update_apps_icons_pos(self.sliding_current)
+		# Enable press action on app
+		for grp in self.list_group_apps:
+				grp.set_enabled(True)
+		print('PanelView.button_release_handler', event)
+		return False
+		pass
+
+	def button_press_handler(self, widget, event):
 		print('PanelView.button_press_handler', event)
 		
 		if event.button == 1:
+			self.sliding_icons = True
+			self.sliding_start = event.y
 			#print ('pouet')
 			#self.panel_menu.hide_menu()
 			#self.dash.show(event.time)
@@ -1451,14 +1530,16 @@ class PanelView(Clutter.Stage):
 		
 	def _create_panel_window(self):
 		display = ClutterGdk.get_default_display()
-		root_height = display.get_default_screen().get_root_window().get_height()
+		self.root_height = display.get_default_screen().get_root_window().get_height()
+		self.root_width = display.get_default_screen().get_root_window().get_width()
 	
 		attr = Gdk.WindowAttr();
 		attr.title = "page-panel"
 		attr.width = 32
-		attr.height = root_height
-		attr.x = 0
+		attr.height = self.root_height
+		attr.x = 0 #root_width-attr.width
 		attr.y = 0
+		#print(attr.x)
 		attr.event_mask = 0
 		attr.window_type = Gdk.WindowType.TOPLEVEL
 		attr.visual = display.get_default_screen().get_rgba_visual()
@@ -1502,7 +1583,10 @@ class PanelView(Clutter.Stage):
 	def sub_menu(self, offset_y, menu_list, event_time):
 		self.raise_window(event_time)
 		self.dash_slide.hide()
-		self.panel_menu.show_menu(self.panel_width, offset_y, menu_list, event_time)	
+		if self.side == 'left':
+			self.panel_menu.show_menu(self.panel_width, offset_y, menu_list, event_time, True)	
+		else:
+			self.panel_menu.show_menu(self.root_width-self.panel_width, offset_y, menu_list, event_time, False)
 		self.panel_menu.window.focus(event_time)
 
 	def raise_window(self, time):
@@ -1600,13 +1684,13 @@ class Reboot():
 class Logout():
 	#dbus-send --session --type=method_call --print-reply --dest=org.gnome.SessionManager /org/gnome/SessionManager org.gnome.SessionManager.Logout uint32:1
 	def activate(self, event_time):
-		bus = dbus.SystemBus()
+		bus = dbus.SessionBus()
 		try:
 			i= dbus_mate(bus)
 			print("logout")
 			i.Logout(1)
 		except:
-			os.system("dbus-send --session --type=method_call --print-reply --dest=org.mate.SessionManager /org/mate/SessionManager org.mate.SessionManager.Logout uint32:1")
+			#os.system("dbus-send --session --type=method_call --print-reply --dest=org.mate.SessionManager /org/mate/SessionManager org.mate.SessionManager.Logout uint32:1")
 			raise Exception("logout somehow doesn't work.")
 
 class Lock():
