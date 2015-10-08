@@ -6,9 +6,6 @@
 #include <gdk/gdkx.h>
 #include <stdio.h>
 
-//#include <numpy/arrayobject.h>
-//#include <numpy/npy_common.h>
-
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -202,47 +199,6 @@ tray_manager_handle_message_data (PyObject       *manager,
 				       XClientMessageEvent  *xevent)
 {
 printf("FIXME %s\n",__FUNCTION__);
-#if 0
-  GList *p;
-  int len;
-  
-  /* Try to see if we can find the
-   * pending message in the list
-   */
-  for (p = manager->messages; p; p = p->next)
-    {
-      PendingMessage *msg = p->data;
-
-      if (xevent->window == msg->window)
-	{
-	  /* Append the message */
-	  len = MIN (msg->remaining_len, 20);
-
-	  memcpy ((msg->str + msg->len - msg->remaining_len),
-		  &xevent->data, len);
-	  msg->remaining_len -= len;
-
-	  if (msg->remaining_len == 0)
-	    {
-	      GtkSocket *socket;
-
-	      socket = g_hash_table_lookup (manager->socket_table, GINT_TO_POINTER (msg->window));
-
-	      if (socket)
-		{
-		  g_signal_emit (manager, manager_signals[MESSAGE_SENT], 0,
-				 socket, msg->str, msg->id, msg->timeout);
-		}
-	      manager->messages = g_list_remove_link (manager->messages,
-						      p);
-	      
-	      pending_message_free (msg);
-	    }
-
-	  return;
-	}
-    }
-#endif
 }
 
 static void
@@ -250,45 +206,13 @@ tray_manager_handle_begin_message (PyObject       *manager,
 				       XClientMessageEvent  *xevent)
 {
 printf("FIXME %s\n",__FUNCTION__);
-#if 0
-  GList *p;
-  PendingMessage *msg;
-
-  /* Check if the same message is
-   * already in the queue and remove it if so
-   */
-  for (p = manager->messages; p; p = p->next)
-    {
-      PendingMessage *msg = p->data;
-
-      if (xevent->window == msg->window &&
-	  xevent->data.l[4] == msg->id)
-	{
-	  /* Hmm, we found it, now remove it */
-	  pending_message_free (msg);
-	  manager->messages = g_list_remove_link (manager->messages, p);
-	  break;
-	}
-    }
-
-  /* Now add the new message to the queue */
-  msg = g_new0 (PendingMessage, 1);
-  msg->window = xevent->window;
-  msg->timeout = xevent->data.l[2];
-  msg->len = xevent->data.l[3];
-  msg->id = xevent->data.l[4];
-  msg->remaining_len = msg->len;
-  msg->str = g_malloc (msg->len + 1);
-  msg->str[msg->len] = '\0';
-  manager->messages = g_list_prepend (manager->messages, msg);
-#endif
 }
 
 static void
 tray_manager_handle_cancel_message (PyObject       *manager,
 					XClientMessageEvent  *xevent)
 {
-	printf("%s\n",__FUNCTION__);
+	printf("FIXME %s\n",__FUNCTION__);
 	PyObject * func = PyObject_GetAttrString(manager, "message_cancel");
 	if(!func) {
 		PyErr_SetString(PyExc_TypeError, "message_cancel callback does not exist");
@@ -305,17 +229,6 @@ return;
 	PyObject* args = Py_BuildValue("(i,i)",xevent->data.l[2], GINT_TO_POINTER (xevent->window));	
  	PyObject_CallObject(func, args);
 	Py_DECREF(args);
-#if 0
-  GtkSocket *socket;
-  
-  socket = g_hash_table_lookup (manager->socket_table, GINT_TO_POINTER (xevent->window));
-  
-  if (socket)
-    {
-      g_signal_emit (manager, manager_signals[MESSAGE_CANCELLED], 0,
-		     socket, xevent->data.l[2]);
-    }
-#endif
 }
 
 
@@ -351,16 +264,16 @@ static void
 tray_undock (PyObject *manager, XDestroyWindowEvent * xevent) {
 printf("%s\n",__FUNCTION__);
 
-PyObject * func = PyObject_GetAttrString(manager, "undock_request");
+	PyObject * func = PyObject_GetAttrString(manager, "undock_request");
 	if(!func) {
 		PyErr_SetString(PyExc_TypeError, "undock_request callback does not exist");
 		return;
 	}
 
 	if (!PyCallable_Check(func)) {
-			PyErr_SetString(PyExc_TypeError, "undock_request must be callable");
-		return;
-		}
+		PyErr_SetString(PyExc_TypeError, "undock_request must be callable");
+	return;
+	}
 
 
 	PyObject* args = Py_BuildValue("(i,i)",xevent->event, GINT_TO_POINTER (xevent->window));	
@@ -419,8 +332,6 @@ static GdkFilterReturn call_python_filter (GdkXEvent *gdkxevent, GdkEvent *event
   	PyGILState_STATE gstate;
 	gstate = PyGILState_Ensure();
 
-//printf("%s\n",__FUNCTION__);
-
   if (xevent->type == ClientMessage)
     {
 	printf("Client Message\n");
@@ -465,8 +376,18 @@ error_handler(Display *display, XErrorEvent *error) {
   char buffer[500];
 
   XGetErrorText(display, error->error_code, buffer, sizeof(buffer));
-  printf("%d:%s\n",error->error_code, buffer);
+  printf("%d:%s (%d)\n",error->error_code, buffer, error->resourceid);
 
+  	PyGILState_STATE gstate;
+	gstate = PyGILState_Ensure();
+   	
+	if(error->error_code == BadWindow) {
+		XDestroyWindowEvent xevent;
+		xevent.event = error->resourceid;
+		tray_undock (panel, &xevent);	
+	}
+
+	PyGILState_Release(gstate);
   return 0;
 }
 
@@ -648,6 +569,8 @@ XMoveResizeWindow(xdisplay,  win_inter, x, y, sz_x, sz_y);
 printf("%d\n",__LINE__);
 	//XResizeWindow(GDK_DISPLAY_XDISPLAY (display),  win_id, 1, 1);
 	printf("%d\n",__LINE__);
+
+	xembed_send(display, win_id, XEMBED_WINDOW_ACTIVATE, 0, 0, 0);
 	XMapWindow(xdisplay,  win_id);
    XMapWindow(xdisplay, win_inter); 
 
@@ -798,18 +721,21 @@ PropModeReplace, &systray_win_id, 1);
 
 
 	printf("OO: %d %d\n",win_id, systray_win_id);
-	XUnmapWindow(GDK_DISPLAY_XDISPLAY (display),  win_id);
+	XUnmapWindow(xdisplay,  win_id);
 	printf("%d\n",__LINE__);
 	    
 	printf("%d\n",__LINE__);
-	XSelectInput(GDK_DISPLAY_XDISPLAY (display), win_id, StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask);
+	XSelectInput(xdisplay, win_id, StructureNotifyMask | PropertyChangeMask| EnterWindowMask | FocusChangeMask);
 	printf("%d\n",__LINE__);
-	XReparentWindow(GDK_DISPLAY_XDISPLAY (display), win_id, win_inter, 0, 0);
+	XReparentWindow(xdisplay, win_id, win_inter, 0, 0);
+	
 	printf("%d\n",__LINE__);	    
 	gdk_window_add_filter(win_sub, &call_python_filter, (gpointer)panel);
 
 	XMapWindow(xdisplay,  win_id);
-	XMapWindow(xdisplay, win_inter); 
+	XMapWindow(xdisplay, win_inter);
+ 
+	XSync( xdisplay, False );
 
 ///g_object_unref(win_sub) ???
 	printf("%d\n",__LINE__);

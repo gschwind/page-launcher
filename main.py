@@ -1034,7 +1034,7 @@ class PanelTray(Clutter.Group):
 		self.sz_y_ico = 24
 
 		self.max_col = int(self.icon_size_x/32)
-		print(self.max_col)
+		#print(self.max_col)
 		self.margin_ico_y = 5
 		self.sub_offset = 2
 		self.window = panel.window
@@ -1048,7 +1048,7 @@ class PanelTray(Clutter.Group):
 		self.icon_back = ItemMenu()
 		self.icon_back.set_size(self.icon_size_x,self.icon_size_y)
 		self.icon_back.set_position(0,0)
-		self.icon_back.set_color(Clutter.Color.new(1,0,0,255))
+		#self.icon_back.set_color(Clutter.Color.new(1,0,0,255))
 
 		self.add_child(self.icon_back)
 		#self.add_child(self.text)
@@ -1073,7 +1073,7 @@ class PanelTray(Clutter.Group):
                                            selection_atom,
                                            timestamp,
                                            True)
-		print(selection_atom_name )
+		#print(selection_atom_name )
 		if not res:
 			print("Unable to set sytray !!")
 		else:
@@ -1123,17 +1123,20 @@ class PanelTray(Clutter.Group):
 
 
 	def undock_request(self, socket_id, window):
-		print('undock request')
-		print(socket_id)
-		print(window)
-		win_inter = self.dock_list[socket_id]
-		PageLauncherHook.undock_tray(self.window, ClutterGdk.get_default_display(), socket_id, win_inter)
-		del self.dock_list[socket_id]
-
+		print('undock request: '+str(socket_id))
+		#print(socket_id)
+		#print(window)
+		if socket_id in self.dock_list: 
+			win_inter = self.dock_list[socket_id]
+			PageLauncherHook.undock_tray(self.window, ClutterGdk.get_default_display(), socket_id, win_inter)
+			del self.dock_list[socket_id]
+		else:
+			print('unknown id:' + str(socket_id))
+			
 	def dock_request(self, socket_id, window):
 		print('dock request')
-		print(socket_id)
-		print(window)
+		#print(socket_id)
+		#print(window)
 		win_inter = PageLauncherHook.dock_tray(self.window, ClutterGdk.get_default_display(), socket_id)
 		self.dock_list[socket_id] = win_inter
 
@@ -1187,14 +1190,15 @@ class PanelView(Clutter.Stage):
 		self.set_opacity(0)
 		self.set_color(Clutter.Color.new(0,0,0,0))
 		self.set_scale(1.0, 1.0)
-		print(self.window.get_position())
+		#print(self.window.get_position())
 
 		self.sliding_icons = False
 		self.sliding_start = 0
 		self.sliding_current = 0;
 		self.connect('button-press-event', self.button_press_handler)
 		self.connect('button-release-event', self.button_release_handler)
-		self.connect("motion-event", self.motion_handler)
+		self.connect("motion-event", self.motion_handler)		
+		self.connect("leave-event", self.leave_handler)
 		# create dash view
 		#self.dash = DashView(self)
 		self.panel_menu = PanelMenu(self)
@@ -1459,8 +1463,8 @@ class PanelView(Clutter.Stage):
 				grp.hide()
 			pos_y += self.ico_size+self.margin
 
-		print(self.sliding_current)
-		print(pos_y)
+		#print(self.sliding_current)
+		#print(pos_y)
 		if self.ico_sys_limit > pos_y:
 				self.sliding_next = 0
 		else:
@@ -1483,6 +1487,10 @@ class PanelView(Clutter.Stage):
 				grp.set_enabled(False)
 		pass
 
+	def leave_handler(self, widget, event):
+		print('PanelView.leave_handler', event)
+		#self.button_release_handler(widget,event)
+		pass
 
 	def button_release_handler(self, widget, event):		
 		self.sliding_current = min(self.sliding_next,0)
@@ -1690,7 +1698,6 @@ class Logout():
 			print("logout")
 			i.Logout(1)
 		except:
-			#os.system("dbus-send --session --type=method_call --print-reply --dest=org.mate.SessionManager /org/mate/SessionManager org.mate.SessionManager.Logout uint32:1")
 			raise Exception("logout somehow doesn't work.")
 
 class Lock():
