@@ -1,9 +1,10 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Python 3 code
 #from distutils.core import setup, Extension
 import subprocess
 
-from numpy.distutils.core import setup, Extension
+from distutils.core import setup, Extension
 
 def pkgconfig(*packages, **kw):
  flag_map = {'-I': 'include_dirs', '-L': 'library_dirs', '-l': 'libraries'}
@@ -23,7 +24,7 @@ def pkgconfig(*packages, **kw):
  return kw
 
 params = pkgconfig('pygobject-3.0', 'clutter-glx-1.0', 'gdk-x11-3.0')
-params['extra_compile_args'] = ['-std=c99 -ggdb']
+params['extra_compile_args'] = ['-std=c99', '-ggdb']
 module1 = Extension('PageLauncherHook', sources = ['page_launcher_hook.c'], **params)
 
 setup (name = 'PageLauncherHook',
