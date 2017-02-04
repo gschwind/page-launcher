@@ -1716,10 +1716,8 @@ class Lock():
 			raise Exception("lock somehow doesn't work.")
 
 if __name__ == '__main__':
-	Gdk.init(sys.argv)
 	Clutter.set_windowing_backend(Clutter.WINDOWING_GDK)
 	Clutter.init(sys.argv)
-	GtkClutter.init(sys.argv)
 
 	# check if page-launcher is already running
 	loop = DBusGMainLoop(set_as_default=True)
