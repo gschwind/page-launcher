@@ -1553,6 +1553,7 @@ class PanelView(Clutter.Stage):
 
     def run(self):
         self.show()
+        self.window.move_resize(0, 0, self.get_width(), self.get_height())
         Clutter.main()
 
     def _create_panel_window(self):
