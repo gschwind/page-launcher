@@ -1716,28 +1716,28 @@ class Lock():
 			raise Exception("lock somehow doesn't work.")
 
 if __name__ == '__main__':
- Gdk.init(sys.argv)
- Clutter.set_windowing_backend(Clutter.WINDOWING_GDK)
- Clutter.init(sys.argv)
- GtkClutter.init(sys.argv)
- 
- # check if page-launcher is already running
- loop = DBusGMainLoop(set_as_default=True)
- bus = dbus.SessionBus()
- try:
-  remote_object = bus.get_object(DBusWidget.interface_name, DBusWidget.object_name)
- except dbus.DBusException:
-  remote_object = None
+	Gdk.init(sys.argv)
+	Clutter.set_windowing_backend(Clutter.WINDOWING_GDK)
+	Clutter.init(sys.argv)
+	GtkClutter.init(sys.argv)
 
- # If the object exist just active the running launcher
- if remote_object:
-  iface = dbus.Interface(remote_object, DBusWidget.interface_name)
-  iface.map()
-  sys.exit(0)
+	# check if page-launcher is already running
+	loop = DBusGMainLoop(set_as_default=True)
+	bus = dbus.SessionBus()
+	try:
+		remote_object = bus.get_object(DBusWidget.interface_name, DBusWidget.object_name)
+	except dbus.DBusException:
+		remote_object = None
 
- # create the object dbus listenner
- dbus_launcher = DBusWidget()
+	# If the object exist just active the running launcher
+	if remote_object:
+		iface = dbus.Interface(remote_object, DBusWidget.interface_name)
+		iface.map()
+		sys.exit(0)
 
- panel = PanelView()
- panel.run()
+	# create the object dbus listenner
+	dbus_launcher = DBusWidget()
+
+	panel = PanelView()
+	panel.run()
 
