@@ -1224,9 +1224,9 @@ class PanelView(Clutter.Stage):
 		self.panel_menu = PanelMenu(self)
 
 		if self.side == 'left':
-			self.dash_slide = DashSlide(self, self.panel_width, 48, 300)
+			self.dash_slide = DashSlide(self, self.panel_width, self.panel_width, 300)
 		else:
-			self.dash_slide = DashSlide(self, root_width-self.panel_width-300, 48, 300)
+			self.dash_slide = DashSlide(self, root_width-self.panel_width-300, self.panel_width, 300)
 
 		# Dictionnary of apps
 		self.dict_apps={}
@@ -1554,6 +1554,7 @@ class PanelView(Clutter.Stage):
 	def run(self):
 		self.show()
 		self.window.move(0,0)
+		self.window.show()
 		Clutter.main()
 		
 	def _create_panel_window(self):
@@ -1563,7 +1564,7 @@ class PanelView(Clutter.Stage):
 	
 		attr = Gdk.WindowAttr();
 		attr.title = "page-panel"
-		attr.width = 32
+		attr.width = self.panel_width
 		attr.height = self.root_height
 		attr.x = 0 #root_width-attr.width
 		attr.y = 0
