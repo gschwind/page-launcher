@@ -1259,7 +1259,6 @@ class PanelView(Clutter.Stage):
 	
 		self.config_init_apps()
 		self.update_current_apps()
-		self.show()
 
 		GObject.timeout_add(1000, self.refresh_timer, self)		
 
@@ -1553,8 +1552,6 @@ class PanelView(Clutter.Stage):
 			
 	def run(self):
 		self.show()
-		self.window.move(0,0)
-		self.window.show()
 		Clutter.main()
 		
 	def _create_panel_window(self):
@@ -1623,6 +1620,10 @@ class PanelView(Clutter.Stage):
 		w = Wnck.Window.get(self.window.get_xid())
 		if w != None:
 			w.activate(time)
+
+	def show(self):
+		super().show()
+		self.window.show()
 
 #####
 ####
