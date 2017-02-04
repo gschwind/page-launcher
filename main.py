@@ -413,9 +413,9 @@ class Slide(SubWindow):
 	def __init__(self, parent, offset_x, size_x):
 		self.parent = parent
 		display = ClutterGdk.get_default_display()
-		root_height = display.get_default_screen().get_root_window().get_height()
+		self.root_height = display.get_default_screen().get_root_window().get_height()
 		root_width = display.get_default_screen().get_root_window().get_width()
-		super().__init__(parent, offset_x, 0, size_x, root_height)
+		super().__init__(parent, offset_x, 0, size_x, self.root_height)
 		
 	def show(self, event_time):
 		print("Slide.show: Dash show")
