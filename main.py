@@ -19,6 +19,11 @@ from math import *
 
 from io import StringIO
 
+import gi
+gi.require_version('ClutterGdk', '1.0')
+gi.require_version('GtkClutter', '1.0')
+gi.require_version('Wnck', '3.0')
+gi.require_version('Gtk', '3.0')
 
 from gi.repository import GObject
 from gi.repository import Gtk
