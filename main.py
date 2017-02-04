@@ -1103,11 +1103,11 @@ class PanelTray(Clutter.Group):
                                                   True)
         # print(selection_atom_name )
         if not res:
-            print("Unable to set sytray !!")
+            print("Unable to set systray !!")
         else:
             res_get = Gdk.selection_owner_get_for_display(display, selection_atom)
             if res_get != self.window:
-                print("Unable to get sytray !!")
+                print("Unable to get systray !!")
             else:
                 print("Owner is ok")
 

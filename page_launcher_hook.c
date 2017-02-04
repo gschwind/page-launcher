@@ -178,23 +178,13 @@ static PyObject * py_set_system_tray_visual(PyObject * self, PyObject * args) {
 
 static void tray_manager_handle_dock_request(PyObject *manager,
 		XClientMessageEvent *xevent) {
-//printf("%s\n",__FUNCTION__);
-	PyObject * func = PyObject_GetAttrString(manager, "dock_request");
-	if (!func) {
-		PyErr_SetString(PyExc_TypeError,
-				"dock_request callback does not exist");
+	PyObject * ret = PyObject_CallMethod(manager, "dock_request", "(i,i)", (int)xevent->data.l[2], (int)xevent->window);
+	if(!ret) {
+		printf("fail to call dock_request\n");
 		return;
 	}
+	Py_DECREF(ret);
 
-	if (!PyCallable_Check(func)) {
-		PyErr_SetString(PyExc_TypeError, "dock_request must be callable");
-		return;
-	}
-
-	PyObject* args = Py_BuildValue("(i,i)", xevent->data.l[2],
-			GINT_TO_POINTER(xevent->window));
-	PyObject_CallObject(func, args);
-	Py_DECREF(args);
 }
 
 static void tray_manager_handle_message_data(PyObject *manager,
@@ -210,22 +200,13 @@ static void tray_manager_handle_begin_message(PyObject *manager,
 static void tray_manager_handle_cancel_message(PyObject *manager,
 		XClientMessageEvent *xevent) {
 	printf("FIXME %s\n", __FUNCTION__);
-	PyObject * func = PyObject_GetAttrString(manager, "message_cancel");
-	if (!func) {
-		PyErr_SetString(PyExc_TypeError,
-				"message_cancel callback does not exist");
+	PyObject * ret = PyObject_CallMethod(manager, "message_cancel", "(i,i)",
+			(int)xevent->data.l[2], (int)xevent->window);
+	if(!ret) {
+		printf("fail to call message_cancel\n");
 		return;
 	}
-
-	if (!PyCallable_Check(func)) {
-		PyErr_SetString(PyExc_TypeError, "message_cancel must be callable");
-		return;
-	}
-
-	PyObject* args = Py_BuildValue("(i,i)", xevent->data.l[2],
-			GINT_TO_POINTER(xevent->window));
-	PyObject_CallObject(func, args);
-	Py_DECREF(args);
+	Py_DECREF(ret);
 }
 
 static GdkFilterReturn tray_manager_handle_event(PyObject *manager,
@@ -254,23 +235,13 @@ static void tray_manager_unmanage(PyObject *manager) {
 }
 static void tray_undock(PyObject *manager, XDestroyWindowEvent * xevent) {
 	printf("%s\n", __FUNCTION__);
-
-	PyObject * func = PyObject_GetAttrString(manager, "undock_request");
-	if (!func) {
-		PyErr_SetString(PyExc_TypeError,
-				"undock_request callback does not exist");
+	PyObject *ret = PyObject_CallMethod(manager, "undock_request", "(i,i)",
+			(int)xevent->event, (int)xevent->window);
+	if(!ret) {
+		printf("fail to call dock_request\n");
 		return;
 	}
-
-	if (!PyCallable_Check(func)) {
-		PyErr_SetString(PyExc_TypeError, "undock_request must be callable");
-		return;
-	}
-
-	PyObject* args = Py_BuildValue("(i,i)", xevent->event,
-			GINT_TO_POINTER(xevent->window));
-	PyObject_CallObject(func, args);
-	Py_DECREF(args);
+	Py_DECREF(ret);
 }
 
 static GdkFilterReturn call_python_filter_inter(GdkXEvent *gdkxevent,
