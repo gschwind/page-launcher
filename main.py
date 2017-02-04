@@ -163,6 +163,9 @@ class apps_entry:
     icon_path = gtk_icon_info.get_filename()
    else:
     icon_path = getIconPath(icon_name, size)
+  #TODO: use a default icon.
+  if not os.path.exists(icon_path):
+   icon_path = '/usr/share/icons/gnome/48x48/apps/gnome-terminal.png'
   return Clutter.Texture.new_from_file(icon_path)
 
  def show(self):
@@ -416,7 +419,7 @@ class Slide(SubWindow):
 		self.root_height = display.get_default_screen().get_root_window().get_height()
 		root_width = display.get_default_screen().get_root_window().get_width()
 		super().__init__(parent, offset_x, 0, size_x, self.root_height)
-		
+
 	def show(self, event_time):
 		print("Slide.show: Dash show")
 		parent_window = ClutterGdk.get_stage_window(self.parent)
