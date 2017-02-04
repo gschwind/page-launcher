@@ -311,15 +311,17 @@ class DBusWidget(dbus.service.Object):
 class SubWindow(Clutter.Stage):
 	def __init__(self, parent, x, y, width, height):
 		super().__init__()
-		display = ClutterGdk.get_default_display()
-		self.root_height = display.get_default_screen().get_root_window().get_height()
-		self.root_width = display.get_default_screen().get_root_window().get_width()
+		self.parent = parent
+
 		self.is_grab = False
 		self._create_menu_window(x, y, width, height)
+
+		# bind this stage to the window.
 		ClutterGdk.set_stage_foreign(self, self.window)
+
+		# Tell the window manager to put this window above the parent.
 		self.window.set_transient_for(parent.window)
 
-		self.parent = parent
 		self.set_user_resizable(False)
 		self.set_title("sub-win")
 		self.set_use_alpha(True)
@@ -328,10 +330,9 @@ class SubWindow(Clutter.Stage):
 		self.set_scale(1.0, 1.0)
 		self.set_accept_focus(True)
 
-	def _create_menu_window(self,x, y, width, height):
+	def _create_menu_window(self, x, y, width, height):
 		display = ClutterGdk.get_default_display()
-		self.root_height = display.get_default_screen().get_root_window().get_height()
-	
+
 		attr = Gdk.WindowAttr();
 		attr.title = "sub-win"
 		attr.width = width
@@ -339,17 +340,28 @@ class SubWindow(Clutter.Stage):
 		attr.x = x
 		attr.y = y
 		attr.event_mask = 0
-		attr.window_type = Gdk.WindowType.TOPLEVEL
+		attr.window_type = Gdk.WindowType.TEMP
 		attr.visual = display.get_default_screen().get_rgba_visual()
 		attr.override_redirect = True
 		attr.type_hint = Gdk.WindowTypeHint.MENU
+
+		# parent is set here if you want create a nested window.
 		self.window = Gdk.Window(None, attr,
-		 Gdk.WindowAttributesType.TITLE
-		|Gdk.WindowAttributesType.VISUAL
-		|Gdk.WindowAttributesType.X
-		|Gdk.WindowAttributesType.Y
-		|Gdk.WindowAttributesType.NOREDIR
-		|Gdk.WindowAttributesType.TYPE_HINT)
+			 Gdk.WindowAttributesType.TITLE
+			|Gdk.WindowAttributesType.VISUAL
+			|Gdk.WindowAttributesType.X
+			|Gdk.WindowAttributesType.Y
+			|Gdk.WindowAttributesType.NOREDIR
+			|Gdk.WindowAttributesType.TYPE_HINT)
+
+	def show(self):
+		super().show()
+		self.window.show()
+
+	def hide(self):
+		self.window.hide()
+		super().hide()
+
 
 
 class ItemMenu(Clutter.Rectangle):
