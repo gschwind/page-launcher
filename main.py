@@ -1181,7 +1181,7 @@ class PanelView(Clutter.Stage):
 		self.margin = 2
 		self.side = 'left'
 
-		self.config_file =os.path.join(os.path.expanduser("~"),'.page-launcher.cfg')
+		self.config_file = os.path.join(os.environ['HOME'], '.page-launcher.cfg')
 		self.config_read()
 		self.ico_size = max(32,self.ico_size)
 		self.panel_width = self.ico_size+2*self.margin
