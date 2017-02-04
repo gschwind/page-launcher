@@ -693,8 +693,8 @@ class PanelMenu(SubWindow):
 		#print(self.global_width)
 		#print(self.global_height)
 
-		if self.root_height < self.global_height+y:
-			y=self.root_height-self.global_height
+		#if self.root_height < self.global_height+y:
+		#	y=self.root_height-self.global_height
 		
 		self.window.resize(self.global_width, self.global_height)
 		if halign_right:
@@ -705,14 +705,14 @@ class PanelMenu(SubWindow):
 		self.set_size(self.global_width, self.global_height)	
 		self.rect.set_size(self.global_width, self.global_height)	
 		
-		self.show_all()
+		super().show()
 		# Focus can only apply on visible window /!\
 		self.window.focus(event_time)
 		pass
 
 	def hide_menu(self):
 		print('PanelMenu.hide_menu')
-		self.hide()
+		super().hide()
 		self.remove_all()
 
 
