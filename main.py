@@ -1595,7 +1595,7 @@ class PanelView(Clutter.Stage):
             self.dash.hide()
 
     def on_active_window_change(self, screen, window):
-        if (self.window.get_xid() != screen.get_active_window().get_xid()):
+        if (self.window.get_xid() != window.get_xid()):
             # TODO HIDE ALL SUB WINDOWS
             self.sub_reset()
 
