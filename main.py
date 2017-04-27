@@ -1590,13 +1590,7 @@ class PanelView(Clutter.Stage):
         print("deactivate #PanelView")
 
     def on_active_window_change(self, screen, window):
-        if (self.window.get_xid() != screen.get_active_window().get_xid()):
-            # TODO HIDE ALL
-            self.dash.hide()
-
-    def on_active_window_change(self, screen, window):
         if (self.window.get_xid() != window.get_xid()):
-            # TODO HIDE ALL SUB WINDOWS
             self.sub_reset()
 
     def sub_reset(self, event_time=0):
