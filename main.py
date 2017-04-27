@@ -202,7 +202,7 @@ class apps_entry:
     def button_press_handler(widget, event, self):
         if event.button == Clutter.BUTTON_PRIMARY:
             self.call()
-            self.rect.get_parent().hide()
+            self.parent.hide()
         pass
 
     def call(self):
