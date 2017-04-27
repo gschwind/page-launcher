@@ -532,8 +532,8 @@ class DashSlide(Slide):
             self.hide()
             return True
         elif event.keyval == Clutter.KEY_Return:
-            if len(self.apps_list) == 1:
-                self.apps_list[0].call()
+            if len(self.apps_list) >= 1:
+                self.apps_list[-1].call()
                 self.hide()
             return True
         return False
