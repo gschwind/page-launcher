@@ -592,11 +592,17 @@ class DashSlide(Slide):
         self.handle_text_changed(data)
         pass
 
+    def _handle_event(self, event):
+        if event.type == Gdk.EventType.BUTTON_RELEASE:
+            if event.window == ClutterGdk.get_default_display().get_default_screen().get_root_window():
+                self.hide()
+
     def _start_grab(self, time):
         if self.is_grab:
             return
         print("START GRABBING")
         self.is_grab = True
+        gdk_event_hook.append(self._handle_event)
         dpy = ClutterGdk.get_default_display()
         dm = dpy.get_device_manager()
         dev = dm.list_devices(Gdk.DeviceType.MASTER)
@@ -608,14 +614,23 @@ class DashSlide(Slide):
                        | Gdk.EventMask.KEY_RELEASE_MASK,
                        None,
                        time)
+            if d.get_source() == Gdk.InputSource.MOUSE:
+                root = dpy.get_default_screen().get_root_window()
+                d.grab(root, Gdk.GrabOwnership.NONE, True,
+                       Gdk.EventMask.BUTTON_PRESS_MASK
+                       | Gdk.EventMask.BUTTON_RELEASE_MASK,
+                       None,
+                       time)
 
     def _stop_grab(self):
         if not self.is_grab:
             return
         self.is_grab = False
+        gdk_event_hook.remove(self._handle_event)
         dpy = ClutterGdk.get_default_display()
         dm = dpy.get_device_manager()
         dev = dm.list_devices(Gdk.DeviceType.MASTER)
+
         for d in dev:
             d.ungrab(Gdk.CURRENT_TIME)
 
@@ -740,7 +755,7 @@ class PanelApp():
     def activate(self, event_time):
         print('ACTIVATE: ' + str(self.xid))
         w = Wnck.Window.get(self.xid)
-        if w != None:
+        if w is not None:
             w.activate(event_time)
         pass
 
@@ -1590,7 +1605,10 @@ class PanelView(Clutter.Stage):
         print("deactivate #PanelView")
 
     def on_active_window_change(self, screen, window):
-        if (self.window.get_xid() != window.get_xid()):
+        if self.window is None:
+            self.sub_reset()
+            return
+        if self.window.get_xid() != window.get_xid():
             self.sub_reset()
 
     def sub_reset(self, event_time=0):
@@ -1613,7 +1631,7 @@ class PanelView(Clutter.Stage):
     def raise_window(self, time):
         self.window.show()
         w = Wnck.Window.get(self.window.get_xid())
-        if w != None:
+        if w is not None:
             w.activate(time)
 
     def show(self):
@@ -1744,10 +1762,20 @@ class Lock():
             raise Exception("lock somehow doesn't work.")
 
 
+gdk_event_hook = []
+
+
+def gdk_handle_event(event):
+    global gdk_event_hook
+    ret = ClutterGdk.handle_event(event)
+    for f in gdk_event_hook:
+        f(event)
+    return ret
+
 if __name__ == '__main__':
     Clutter.set_windowing_backend(Clutter.WINDOWING_GDK)
     Clutter.init(sys.argv)
-
+    Gdk.Event.handler_set(gdk_handle_event)
     # check if page-launcher is already running
     loop = DBusGMainLoop(set_as_default=True)
     bus = dbus.SessionBus()
