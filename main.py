@@ -164,7 +164,7 @@ class apps_entry:
                 icon_path = getIconPath(icon_name, size)
         # TODO: use a default icon.
         if not os.path.exists(icon_path):
-            icon_path = '/usr/share/icons/gnome/48x48/apps/gnome-terminal.png'
+            icon_path = '/usr/share/icons/mate/48x48/apps/gnome-terminal.png'
         return Clutter.Texture.new_from_file(icon_path)
 
     def show(self):
