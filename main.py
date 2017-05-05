@@ -253,7 +253,10 @@ class apps_handler:
         return ret
 
     def match_apps(self, patern):
-        print("pattern:" + patern)
+        if not patern:
+            return []
+
+        print("pattern:" + str(patern))
         p = re.compile("^" + patern.lower() + "$")
         ret = list()
         for de in self._apps:
@@ -984,10 +987,11 @@ class PanelGroupApp(PanelIcon):
         print("DESTROY")
 
     def add(self, iapp):
-        print("Adding " + str(iapp.get_xid()) + " to " + self.name)
-        self.app_list[iapp.get_xid()] = iapp
-        if self.icon_1px:
-            self.icon_1px.show()
+        if iapp.get_xid() != None:
+            #print("Adding " + str(iapp.get_xid()) + " to " + self.name)
+            self.app_list[iapp.get_xid()] = iapp
+            if self.icon_1px:
+                self.icon_1px.show()
 
     def remove(self, iapp):
         self.app_list.pop(iapp.get_xid())
@@ -1155,6 +1159,7 @@ class PanelTray(Clutter.Group):
         tmp_y = self.margin_ico_y
         pos_x = self.update_pos_x(min(len(self.dock_list) - ind, self.max_col))
         for win_id, win_inter in self.dock_list.items():
+            print("Move tray")
 
             PageLauncherHook.move_tray(self.window,
                                        ClutterGdk.get_default_display(),
@@ -1170,7 +1175,7 @@ class PanelTray(Clutter.Group):
             ind += 1
 
     def undock_request(self, socket_id, window):
-        print('undock request: ' + str(socket_id))
+        print('++undock request: ' + hex(socket_id))
         # print(socket_id)
         # print(window)
         if socket_id in self.dock_list:
@@ -1178,14 +1183,17 @@ class PanelTray(Clutter.Group):
             PageLauncherHook.undock_tray(self.window, ClutterGdk.get_default_display(), socket_id, win_inter)
             del self.dock_list[socket_id]
         else:
-            print('unknown id:' + str(socket_id))
+            print('unknown id:' + hex(socket_id))
+        print('--undock request: ' + hex(socket_id))
 
     def dock_request(self, socket_id, window):
-        print('dock request')
+        print('++dock request: ' + hex(socket_id))
         # print(socket_id)
         # print(window)
         win_inter = PageLauncherHook.dock_tray(self.window, ClutterGdk.get_default_display(), socket_id)
-        self.dock_list[socket_id] = win_inter
+        if win_inter:
+            self.dock_list[socket_id] = win_inter
+        print('--dock request: ' + hex(socket_id))
 
     def message_begin(self, socket_id, window):
         print('message begin')
@@ -1205,7 +1213,7 @@ class PanelView(Clutter.Stage):
         super().__init__()
 
         # Manualy create the window to setup properties before mapping the window
-        self.ico_size = 64
+        self.ico_size = 32
         self.margin = 2
         self.side = 'left'
 
@@ -1319,7 +1327,11 @@ class PanelView(Clutter.Stage):
                 self.create_app(group_name, None, True)
 
     def refresh_timer(self, *arg):
+        #try:
         self.update_current_apps()
+        #except:
+        #  print("Error during update")
+
         return True
 
     def find_app(self, name):
@@ -1384,6 +1396,7 @@ class PanelView(Clutter.Stage):
         #	print(app.is_sticky())
 
         self.update_cnt += 1
+        print("==================================")
         # Loop on Wnck apps
         for app in apps:
             if not app.is_sticky():
@@ -1392,21 +1405,23 @@ class PanelView(Clutter.Stage):
                 name = app.get_name()
                 group_name = app.get_class_group_name()
                 # dir(app)
-                # print('---')
-                # print(app.get_icon_name())
-                # print(app.get_application().get_name())
-                # print(app.get_application().get_pid())
-                # print(app.get_class_group_name())
-                # print(app.get_class_instance_name())
-                # print(group_name)
+                if 0:
+                    print('---')
+                    print(app.get_icon_name())
+                    print(app.get_application().get_name())
+                    print(app.get_application().get_pid())
+                    print(app.get_class_group_name())
+                    print(app.get_class_instance_name())
+                    print(group_name)
+                    print(xid)
 
                 # Check if app is already in list
                 if xid in self.dict_apps:
                     iapp = self.dict_apps[xid]
                     iapp.set_name(app.get_name())
                 # New app
-                else:
-                    print('Create new app:' + str(xid) + "(" + group_name + ")")
+                elif xid is not None and app.get_application().get_pid() is not 0:
+                    print('Create new app:' + str(xid) + "(" + str(group_name) + ")")
                     # Check group if it does exist
                     grp = None
                     for group in self.list_group_apps:
@@ -1605,6 +1620,9 @@ class PanelView(Clutter.Stage):
         print("deactivate #PanelView")
 
     def on_active_window_change(self, screen, window):
+        if window is None:
+            self.sub_reset()
+            return
         if self.window is None:
             self.sub_reset()
             return
@@ -1612,10 +1630,12 @@ class PanelView(Clutter.Stage):
             self.sub_reset()
 
     def sub_reset(self, event_time=0):
+        print('sub_reset')
         self.dash_slide.hide()
         self.panel_menu.hide_menu()
 
     def sub_dash(self, event_time):
+        print('sub_dash')
         self.dash_slide.show(event_time)
         self.panel_menu.hide_menu()
 
