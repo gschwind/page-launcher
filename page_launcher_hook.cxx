@@ -678,7 +678,7 @@ static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
 		  1, 1, // width, height,
 		  GDK_INPUT_OUTPUT, // wclass
 		  panel_gdk_visual, // visual
-		  GDK_WINDOW_TOPLEVEL, // window_type
+		  GDK_WINDOW_TEMP, // window_type
 		  nullptr, // cursor
 		  nullptr, // wmclass_name
 		  nullptr, // wmclass_class
@@ -688,6 +688,7 @@ static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
 
   auto container_gdk_window = gdk_window_new(gdk_screen_get_root_window(gdk_screen), &attr, GDK_WA_X|GDK_WA_Y|GDK_WA_VISUAL|GDK_WA_NOREDIR);
   gdk_window_set_transient_for(container_gdk_window, panel_gdk_window);
+  gdk_window_stick(container_gdk_window); // make the window stiky (shown on all desktop)
 
   gdk_window_reparent(dock_gdk_window, container_gdk_window, 0, 0);
 
