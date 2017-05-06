@@ -614,10 +614,12 @@ static PyObject * py_undock_tray(PyObject * self, PyObject * args) {
   Py_RETURN_NONE;
 }
 static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
+  printf("call %s\n", __PRETTY_FUNCTION__);
+
   PyObject * py_panel_gdk_window;
   PyObject * pyobj_display; // the GdkWindow
   PyObject * py_win_id;
-  printf("%s %d\n", __FUNCTION__, __LINE__);
+
   if (!PyArg_ParseTuple(args, "OOO", &py_panel_gdk_window, &pyobj_display,
       &py_win_id))
     return NULL;
@@ -636,17 +638,26 @@ static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
   if (!PyLong_Check(py_win_id)) {
     return NULL;
   }
-  printf("%s %d\n", __FUNCTION__, __LINE__);
+
   long win_id = PyLong_AsLong(py_win_id);
   GdkWindow * panel_gdk_window = GDK_WINDOW(pygobject_get(py_panel_gdk_window));
   GdkDisplay * gdk_display = GDK_DISPLAY(pygobject_get(pyobj_display));
 
-
+  // ignore x11 error for followings x11 request
   gdk_x11_display_error_trap_push(gdk_display);
 
-  printf("%p %p %ld\n", gdk_display, panel_gdk_window, win_id);
   GdkWindow * dock_gdk_window = gdk_x11_window_foreign_new_for_display(gdk_display,
-      win_id);
+		  win_id);
+
+  // add filter and request all required events.
+  gdk_window_add_filter(dock_gdk_window, &call_python_filter, (gpointer) panel);
+  gdk_window_set_events(dock_gdk_window, (GdkEventMask)(GDK_STRUCTURE_MASK|GDK_PROPERTY_CHANGE_MASK));
+
+  // if the dock window is already destroyed, abort
+  if (gdk_window_is_destroyed(dock_gdk_window)) {
+	  Py_RETURN_NONE;
+  }
+
   long systray_win_id = gdk_x11_window_get_xid(panel_gdk_window);
   Status ec;
 
@@ -683,16 +694,12 @@ static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
 
   gdk_window_reparent(dock_gdk_window, container_gdk_window, 0, 0);
 
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-  gdk_window_add_filter(dock_gdk_window, &call_python_filter, (gpointer) panel);
-
   gdk_window_show_unraised(dock_gdk_window);
   gdk_window_show_unraised(container_gdk_window);
 
   xembed_send(gdk_display, win_id, XEMBED_EMBEDDED_NOTIFY, 0, systray_win_id, 1);
   xembed_send(gdk_display, win_id, XEMBED_WINDOW_ACTIVATE, 0, 0, 0);
   xembed_send(gdk_display, win_id, XEMBED_FOCUS_IN, XEMBED_FOCUS_CURRENT, 0, 0);
-  printf("%s %d\n", __FUNCTION__, __LINE__);
 
   gdk_x11_display_error_trap_pop_ignored(gdk_display);
   gdk_display_flush(gdk_display);
