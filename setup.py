@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Python 3 code
-#from distutils.core import setup, Extension
 import subprocess
 
 from distutils.core import setup, Extension
@@ -24,8 +22,8 @@ def pkgconfig(*packages, **kw):
  return kw
 
 params = pkgconfig('pygobject-3.0', 'clutter-glx-1.0', 'gdk-x11-3.0')
-params['extra_compile_args'] = ['-std=c99', '-ggdb']
-module1 = Extension('PageLauncherHook', sources = ['page_launcher_hook.c'], **params)
+params['extra_compile_args'] = ['-std=c++11', '-ggdb']
+module1 = Extension('PageLauncherHook', sources = ['page_launcher_hook.cxx'], **params)
 
 setup (name = 'PageLauncherHook',
 		version = '1.0',

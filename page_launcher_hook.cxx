@@ -251,8 +251,8 @@ static void tray_undock(PyObject *manager, XDestroyWindowEvent * xevent) {
 
 static GdkFilterReturn call_python_filter_inter(GdkXEvent *gdkxevent,
     GdkEvent *event, gpointer data) {
-  XEvent *xevent = (GdkXEvent *) gdkxevent;
-  PyObject *manager = data;
+  XEvent *xevent = (XEvent *) gdkxevent;
+  PyObject *manager = reinterpret_cast<PyObject*>(data);
   GdkFilterReturn retval = GDK_FILTER_CONTINUE;
 
 //printf("%s\n",__FUNCTION__);
@@ -300,8 +300,8 @@ static GdkFilterReturn call_python_filter_inter(GdkXEvent *gdkxevent,
 static GdkFilterReturn call_python_filter(GdkXEvent *gdkxevent, GdkEvent *event,
     gpointer data) {
   printf("++ %s %d\n",__FUNCTION__, __LINE__);
-  XEvent *xevent = (GdkXEvent *) gdkxevent;
-  PyObject *manager = data;
+  XEvent *xevent = (XEvent *) gdkxevent;
+  PyObject *manager = reinterpret_cast<PyObject*>(data);
   GdkFilterReturn retval = GDK_FILTER_CONTINUE;
 
   PyGILState_STATE gstate;
@@ -704,7 +704,7 @@ static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
         False);
     Atom WINDOW = XInternAtom(xdisplay, "WINDOW", False);
     XChangeProperty(xdisplay, win_inter, WM_TRANSIENT_FOR, WINDOW, 32,
-    PropModeReplace, &systray_win_id, 1);
+    PropModeReplace, reinterpret_cast<uint8_t*>(&systray_win_id), 1);
   printf("%s %d\n", __FUNCTION__, __LINE__);
   }
 
