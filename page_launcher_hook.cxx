@@ -4,19 +4,30 @@
 #include <gdk/gdk.h>
 #include <X11/Xlib.h>
 #include <gdk/gdkx.h>
-#include <stdio.h>
 
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+
+#include <memory>
+#include <map>
 
 PyObject * panel = NULL; // the function to call
+
+struct python_call_filter_data {
+	PyObject * module;
+	PyObject * func;
+};
 
 struct module_state {
   PyObject * Error;
 
+  std::map<PyObject * , std::shared_ptr<python_call_filter_data>> filter_handlers;
+
   // store the gdk_atom_type i.e. gi.repository.Gdk.Atom
   PyObject * gdk_atom_type;
+  PyObject * gdk_event_type;
 };
 
 inline module_state * get_module_state(PyObject * m) {
@@ -302,6 +313,127 @@ static GdkFilterReturn call_python_filter_inter(GdkXEvent *gdkxevent,
   }
 
   return retval;
+}
+
+static GdkFilterReturn _python_call_filter(GdkXEvent *gdkxevent, GdkEvent *event, gpointer data)
+{
+	python_call_filter_data * ctx =
+			reinterpret_cast<python_call_filter_data *>(data);
+
+	PyGILState_STATE gstate = PyGILState_Ensure();
+
+	PyObject * py_gdk_event = PyObject_CallFunctionObjArgs(get_module_state(ctx->module)->gdk_event_type, NULL);
+	GdkEvent * gdk_event = pyg_pointer_get(py_gdk_event, GdkEvent);
+	std::copy(event, event+1, gdk_event);
+
+	PyObject * py_ret = NULL;
+	if (PyMethod_Check(ctx->func)) {
+		PyObject * func = PyMethod_Function(ctx->func);
+		PyObject * self = PyMethod_Self(ctx->func);
+		py_ret = PyObject_CallFunctionObjArgs(func, self, py_gdk_event, NULL);
+	} else {
+		py_ret = PyObject_CallFunctionObjArgs(ctx->func, py_gdk_event, NULL);
+	}
+
+	GdkFilterReturn ret = GDK_FILTER_CONTINUE;
+	if (py_ret == nullptr) {
+		// TODO: Exception
+		printf("function call has an exception:\n");
+		PyErr_PrintEx(1);
+		PyErr_Clear();
+		printf("*****\n");
+	} else if (Py_None == py_ret) {
+		// continue
+	} else if (PyLong_Check(py_ret)) {
+		ret = static_cast<GdkFilterReturn>(PyLong_AsLong(py_ret));
+	}
+
+	Py_XDECREF(py_ret);
+	PyGILState_Release(gstate);
+	return ret;
+}
+
+static PyObject * py_add_filter(PyObject * self, PyObject * args)
+{
+	PyObject * py_window;
+	PyObject * py_func;
+
+	auto gdk_display = gdk_display_get_default();
+
+	if (!PyArg_ParseTuple(args, "OO", &py_window, &py_func))
+		return NULL;
+
+	GdkWindow * window = nullptr;
+	if (pygobject_check(py_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		window = GDK_WINDOW(pygobject_get(py_window));
+	} else if (PyLong_Check(py_window)) {
+		window = gdk_x11_window_foreign_new_for_display(gdk_display,
+				PyLong_AsLong(py_window));
+		if (window == nullptr) { // window
+			printf("WARNING: GdkWindow not found from XID\n");
+			Py_RETURN_NONE;
+		}
+	} else {
+		PyErr_SetString(PyExc_TypeError, "arg0 must be a GdkWindow or XID");
+		return NULL;
+	}
+
+	if (not PyCallable_Check(py_func)) {
+		PyErr_SetString(PyExc_TypeError, "arg1 is not callable");
+		return NULL;
+	}
+
+	auto handler = std::make_shared<python_call_filter_data>();
+
+	handler->func = py_func;
+	Py_INCREF(handler->func);
+
+	handler->module = self;
+
+	get_module_state(self)->filter_handlers[py_func] = handler;
+	gdk_window_add_filter(window, &_python_call_filter, (gpointer) handler.get());
+
+	// As we return py_func we must increment ref to provide new reference to the caller.
+	Py_INCREF(py_func);
+	return py_func;
+
+}
+
+static PyObject * py_remove_filter(PyObject * self, PyObject * args)
+{
+	PyObject * py_window;
+	PyObject * py_func;
+
+	auto gdk_display = gdk_display_get_default();
+
+	if (!PyArg_ParseTuple(args, "OO", &py_window, &py_func))
+		return NULL;
+
+	GdkWindow * window = nullptr;
+	if (pygobject_check(py_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		window = GDK_WINDOW(pygobject_get(py_window));
+	} else if (PyLong_Check(py_window)) {
+		window = gdk_x11_window_foreign_new_for_display(gdk_display,
+				PyLong_AsLong(py_window));
+		if (window == nullptr) { // window
+			printf("WARNING: GdkWindow not found from XID\n");
+			Py_RETURN_NONE;
+		}
+	} else {
+		PyErr_SetString(PyExc_TypeError, "arg0 must be a GdkWindow or XID");
+		return NULL;
+	}
+
+	auto x = get_module_state(self)->filter_handlers.find(py_func);
+	if(x != get_module_state(self)->filter_handlers.end()) {
+		auto data = x->second;
+		gdk_window_remove_filter(window, &_python_call_filter, (gpointer)data.get());
+		Py_XDECREF(data->func);
+		get_module_state(self)->filter_handlers.erase(x);
+	}
+
+	Py_RETURN_NONE;
+
 }
 
 static GdkFilterReturn call_python_filter(GdkXEvent *gdkxevent, GdkEvent *event,
@@ -922,6 +1054,28 @@ static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
   return Py_BuildValue("l", gdk_x11_window_get_xid(container_gdk_window));
 }
 
+
+/**
+ * Test how event are handled by GI
+ **/
+static PyObject * py_test_event(PyObject * self, PyObject * args)
+{
+	  PyObject * py_event;
+
+	  if (!PyArg_ParseTuple(args, "O", &py_event))
+	    return NULL;
+
+
+	  if (PyObject_IsInstance(py_event, get_module_state(self)->gdk_event_type)) {
+	  		GdkEvent * event = pyg_pointer_get(py_event, GdkEvent);
+	  		printf("event= %d\n", event->button.time);
+	  		event->configure.width = 42;
+	  	}
+
+	  Py_RETURN_NONE;
+
+}
+
 #define TPL_FUNCTION(name) {#name, py_##name, METH_VARARGS, "Not documented"}
 #define TPL_FUNCTION_DOC(name, doc) {#name, py_##name, METH_VARARGS, doc}
 
@@ -937,6 +1091,9 @@ static PyMethodDef methods[] = {
     TPL_FUNCTION_DOC(set_system_tray_visual, "set _NET_SYSTEM_TRAY_VISUAL"),
 	TPL_FUNCTION_DOC(send_client_message, "Send a x11 client message"),
 	TPL_FUNCTION_DOC(property_change, "Change a GdkWindow property"),
+	TPL_FUNCTION_DOC(test_event, "Test GdkEvent structure"),
+	TPL_FUNCTION_DOC(add_filter, "Add event filter to a GdkWindow"),
+	TPL_FUNCTION_DOC(remove_filter, "Remove event filter to a GdkWindow"),
     { NULL, NULL, 0, NULL } // sentinel
 };
 
@@ -977,6 +1134,10 @@ PyMODINIT_FUNC PyInit_PageLauncherHook(void)
 	  return NULL;
   PyModule_AddObject(m , "Gdk", gdk_module);
 
+  // implace call of constructor.
+  new (get_module_state(m)) module_state;
+
+  get_module_state(m)->gdk_event_type = PyObject_GetAttrString(gdk_module, "Event");
   get_module_state(m)->gdk_atom_type = PyObject_GetAttrString(gdk_module, "Atom");
   /* create the PageLauncherHook exception */
   auto error_obj = PyErr_NewException("PageLauncherHook.error", NULL, NULL);
