@@ -25,8 +25,12 @@ params = pkgconfig('pygobject-3.0', 'clutter-glx-1.0', 'gdk-x11-3.0')
 params['extra_compile_args'] = ['-std=c++11', '-ggdb']
 module1 = Extension('PageLauncherHook', sources = ['page_launcher_hook.cxx'], **params)
 
-setup (name = 'PageLauncherHook',
-		version = '1.0',
-		description = 'Low level fonction not avalaible in python',
-		ext_modules = [module1])
-
+setup (name = 'PageLauncher',
+    version = '1.0',
+    description = 'Low level fonction not avalaible in python',
+    ext_modules = [module1],
+    scripts = ["page-launcher.py"],
+   data_files=[
+            ('share/page-launcher', ['data/shutdown.svg','data/logout.png','data/app.svg', 'data/launcher_arrow_ltr_19.svg']),
+            ('share/applications', ['page-launcher.desktop'])
+            ],)

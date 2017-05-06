@@ -67,6 +67,12 @@ color_icon_entry = Clutter.Color.new(128, 128, 128, 255)  # red,green,blue,alpha
 font_clock = "Sans Bold 12"
 color_clock = Clutter.Color.new(255, 255, 255, 255)  # red,green,blue,alpha
 
+import pkg_resources
+print(__name__)
+print(sys.exec_prefix)
+print(sys.prefix)
+data_path = pkg_resources.resource_filename(__name__, '../share/page-launcher')
+print(data_path)
 
 def sig_int_handler(n):
     Clutter.main_quit()
@@ -874,7 +880,7 @@ class PanelClock(Clutter.Group):
 
 class PanelApps(PanelIcon):
     def __init__(self, panel, ico_size):
-        super().__init__(panel, Clutter.Texture.new_from_file("./data/app.svg"), ico_size, 3 * ico_size / 4)
+        super().__init__(panel, Clutter.Texture.new_from_file(os.path.join(data_path,"app.svg")), ico_size, 3 * ico_size / 4)
 
     def button_press_handler(self, widget, event):
         self.panel.sub_dash(event.time)
@@ -883,7 +889,7 @@ class PanelApps(PanelIcon):
 
 class PanelShutdown(PanelIcon):
     def __init__(self, panel, ico_size):
-        super().__init__(panel, Clutter.Texture.new_from_file("./data/shutdown.svg"), ico_size, 3 * ico_size / 4)
+        super().__init__(panel, Clutter.Texture.new_from_file(os.path.join(data_path,"shutdown.svg")), ico_size, 3 * ico_size / 4)
 
     def button_press_handler(self, widget, event):
         menu_list = [
@@ -911,9 +917,9 @@ class PanelGroupApp(PanelIcon):
 
         super().__init__(panel, icon, ico_size, 3 * ico_size / 4)
 
-        self.arrows = [Clutter.Texture.new_from_file("./data/launcher_arrow_ltr_19.svg"),
-                       Clutter.Texture.new_from_file("./data/launcher_arrow_ltr_19.svg"),
-                       Clutter.Texture.new_from_file("./data/launcher_arrow_ltr_19.svg")]
+        self.arrows = [Clutter.Texture.new_from_file(os.path.join(data_path,"launcher_arrow_ltr_19.svg")),
+                       Clutter.Texture.new_from_file(os.path.join(data_path,"launcher_arrow_ltr_19.svg")),
+                       Clutter.Texture.new_from_file(os.path.join(data_path,"launcher_arrow_ltr_19.svg"))]
 
         for arrow in self.arrows:
             self.insert_child_above(arrow, self.icon_back)
