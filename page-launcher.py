@@ -1380,7 +1380,8 @@ class PanelView(Clutter.Stage):
             ico.set_from_rgb_data(data, pix.get_has_alpha(), width, height, rowstride, bpp, 0);
         # ico.set_width(48,48)
         # ico_data=  pix.get_pixels_array()
-        assert (ico != None)
+        if ico is None:
+            return None
 
         # print('Create new group:' + str(group_name))
         grp = PanelGroupApp(self, group_name, ico, self.ico_size, cb_new_process, locked)

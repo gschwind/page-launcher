@@ -687,10 +687,7 @@ static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
   };
 
   auto container_gdk_window = gdk_window_new(gdk_screen_get_root_window(gdk_screen), &attr, GDK_WA_X|GDK_WA_Y|GDK_WA_VISUAL|GDK_WA_NOREDIR);
-
-  auto WM_TRANSIENT_FOR = gdk_atom_intern_static_string("WM_TRANSIENT_FOR");
-  auto WINDOW = gdk_atom_intern_static_string("WINDOW");
-  gdk_property_change(container_gdk_window, WM_TRANSIENT_FOR, WINDOW, 32, GDK_PROP_MODE_REPLACE, reinterpret_cast<uint8_t*>(&systray_win_id), 1);
+  gdk_window_set_transient_for(container_gdk_window, panel_gdk_window);
 
   gdk_window_reparent(dock_gdk_window, container_gdk_window, 0, 0);
 
