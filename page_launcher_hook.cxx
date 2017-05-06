@@ -649,6 +649,11 @@ static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
   GdkWindow * dock_gdk_window = gdk_x11_window_foreign_new_for_display(gdk_display,
 		  win_id);
 
+  // abort the dock panel is already destroyed.
+  if(dock_gdk_window == nullptr) {
+	  Py_RETURN_NONE;
+  }
+
   // add filter and request all required events.
   gdk_window_add_filter(dock_gdk_window, &call_python_filter, (gpointer) panel);
   gdk_window_set_events(dock_gdk_window, (GdkEventMask)(GDK_STRUCTURE_MASK|GDK_PROPERTY_CHANGE_MASK));
