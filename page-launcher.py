@@ -1408,6 +1408,7 @@ class PanelView(Clutter.Stage):
             print(app.is_sticky())
             print(app.get_window_type())
             print(app.get_transient())
+            print(app.get_application().get_pid())
 
         self.update_cnt += 1
         print("==================================")
@@ -1417,6 +1418,8 @@ class PanelView(Clutter.Stage):
             if app.is_sticky():
                 b_app_valid = False
             if app.get_window_type() != Wnck.WindowType.NORMAL:
+                b_app_valid = False
+            if app.get_transient() != None:
                 b_app_valid = False
             if b_app_valid:
                 # print(app.get_xid())
@@ -1439,7 +1442,7 @@ class PanelView(Clutter.Stage):
                     iapp = self.dict_apps[xid]
                     iapp.set_name(app.get_name())
                 # New app
-                elif xid is not None and app.get_application().get_pid() is not 0:
+                elif xid is not None:
                     print('Create new app:' + str(xid) + "(" + str(group_name) + ")")
                     # Check group if it does exist
                     grp = None
