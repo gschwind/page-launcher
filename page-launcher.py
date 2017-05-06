@@ -16,6 +16,7 @@ import pprint  # debug
 import configparser  # Save Config
 
 from math import *
+import struct
 
 from io import StringIO
 
@@ -48,6 +49,10 @@ from dbus.mainloop.glib import DBusGMainLoop
 
 import shlex
 import subprocess
+
+SYSTEM_TRAY_ORIENTATION_HORZ = 0
+SYSTEM_TRAY_ORIENTATION_VERT = 1
+
 
 font_comment = "Sans 8"
 color_comment = Clutter.Color.new(200, 200, 200, 255)
@@ -1142,10 +1147,18 @@ class PanelTray(Clutter.Group):
             else:
                 print("Owner is ok")
 
-            PageLauncherHook.set_system_tray_orientation(self.window, True)
+            #PageLauncherHook.set_system_tray_orientation(self.window, True)
+            self._set_system_tray_orientation(SYSTEM_TRAY_ORIENTATION_VERT)
+
             PageLauncherHook.set_system_tray_visual(self.window, display)
             PageLauncherHook.set_system_tray_filter(self.window, display, self)
             # self.window.add_filter(self.toto)
+
+    def _set_system_tray_orientation(self, orientation):
+        CARDINAL = Gdk.atom_intern("CARDINAL", False) # TODO: cache
+        _NET_SYSTEM_TRAY_ORIENTATION = Gdk.atom_intern("_NET_SYSTEM_TRAY_ORIENTATION", False) # TODO: cache
+        PageLauncherHook.property_change(self.window, _NET_SYSTEM_TRAY_ORIENTATION, CARDINAL, 32, Gdk.PropMode.REPLACE, struct.pack("i", orientation), 1)
+
 
     def get_size_y(self):
         sz = int(ceil(len(self.dock_list) / self.max_col) * (self.sz_y_ico + self.margin_ico_y) + self.margin_ico_y)
