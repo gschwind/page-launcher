@@ -614,15 +614,15 @@ static PyObject * py_undock_tray(PyObject * self, PyObject * args) {
   Py_RETURN_NONE;
 }
 static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
-  PyObject * py_gdk_window;
+  PyObject * py_panel_gdk_window;
   PyObject * pyobj_display; // the GdkWindow
   PyObject * py_win_id;
   printf("%s %d\n", __FUNCTION__, __LINE__);
-  if (!PyArg_ParseTuple(args, "OOO", &py_gdk_window, &pyobj_display,
+  if (!PyArg_ParseTuple(args, "OOO", &py_panel_gdk_window, &pyobj_display,
       &py_win_id))
     return NULL;
 
-  if (!pygobject_check(py_gdk_window,
+  if (!pygobject_check(py_panel_gdk_window,
       pygobject_lookup_class(GDK_TYPE_WINDOW))) {
     return NULL;
   }
@@ -638,125 +638,67 @@ static PyObject * py_dock_tray(PyObject * self, PyObject * args) {
   }
   printf("%s %d\n", __FUNCTION__, __LINE__);
   long win_id = PyLong_AsLong(py_win_id);
-  GdkWindow * window = GDK_WINDOW(pygobject_get(py_gdk_window));
-  GdkDisplay * display = GDK_DISPLAY(pygobject_get(pyobj_display));
+  GdkWindow * panel_gdk_window = GDK_WINDOW(pygobject_get(py_panel_gdk_window));
+  GdkDisplay * gdk_display = GDK_DISPLAY(pygobject_get(pyobj_display));
 
 
-  gdk_x11_display_error_trap_push(display);
+  gdk_x11_display_error_trap_push(gdk_display);
 
-  printf("%p %p %d\n",display, window, win_id);
-  GdkWindow * win_sub = gdk_x11_window_foreign_new_for_display(display,
+  printf("%p %p %ld\n", gdk_display, panel_gdk_window, win_id);
+  GdkWindow * dock_gdk_window = gdk_x11_window_foreign_new_for_display(gdk_display,
       win_id);
-  long systray_win_id = gdk_x11_window_get_xid(window);
+  long systray_win_id = gdk_x11_window_get_xid(panel_gdk_window);
   Status ec;
 
-  printf("%s %d\n", __FUNCTION__, __LINE__);
+  GdkScreen * gdk_screen = gdk_display_get_default_screen(gdk_display);
 
-  GdkScreen * screen = gdk_display_get_default_screen(display);
-  Screen * xscreen = GDK_SCREEN_XSCREEN(screen);
-  Display * xdisplay = GDK_DISPLAY_XDISPLAY(display);
-  printf("%s %d\n", __FUNCTION__, __LINE__);
+  auto dock_gdk_visual = gdk_window_get_visual(dock_gdk_window);
+  auto dock_gdk_visual_depth = gdk_visual_get_depth(dock_gdk_visual);
+  printf("dock_gdk_visual_depth = %d\n", dock_gdk_visual_depth);
 
+  auto panel_gdk_visual = gdk_window_get_visual(panel_gdk_window);
+  auto panel_gdk_visual_depth = gdk_visual_get_depth(panel_gdk_visual);
+  printf("panel_gdk_visual_depth = %d\n", panel_gdk_visual_depth);
 
-  XWindowAttributes panel_attributes;
-  ec = XGetWindowAttributes(xdisplay, systray_win_id, &panel_attributes);
-  if(!ec) {
-    printf("Unable to get window attributes\n");
-    Py_RETURN_NONE;
-  }
-  printf("%s %d %d\n", __FUNCTION__, __LINE__, ec);
+  GdkWindowAttr attr = {
+		  nullptr, // title
+		  0, // event_mask
+		  -1, -1, // x, y
+		  1, 1, // width, height,
+		  GDK_INPUT_OUTPUT, // wclass
+		  panel_gdk_visual, // visual
+		  GDK_WINDOW_TOPLEVEL, // window_type
+		  nullptr, // cursor
+		  nullptr, // wmclass_name
+		  nullptr, // wmclass_class
+		  True, // override_redirect
+		  GDK_WINDOW_TYPE_HINT_NORMAL, //type_hint
+  };
 
-  XWindowAttributes window_attributes;
-  ec = XGetWindowAttributes(xdisplay, win_id, &window_attributes);
-  if(!ec) {
-    printf("Unable to get window attributes\n");
-    Py_RETURN_NONE;
-  }
+  auto container_gdk_window = gdk_window_new(gdk_screen_get_root_window(gdk_screen), &attr, GDK_WA_X|GDK_WA_Y|GDK_WA_VISUAL|GDK_WA_NOREDIR);
 
-  printf("DOCKING TRAY - %d %d depth:%d panel:%d %d\n", __LINE__, win_id,
-      window_attributes.depth, panel_attributes.depth, ec);
-  Window win_inter;
-  printf("%s %d\n", __FUNCTION__, __LINE__);
+  auto WM_TRANSIENT_FOR = gdk_atom_intern_static_string("WM_TRANSIENT_FOR");
+  auto WINDOW = gdk_atom_intern_static_string("WINDOW");
+  gdk_property_change(container_gdk_window, WM_TRANSIENT_FOR, WINDOW, 32, GDK_PROP_MODE_REPLACE, reinterpret_cast<uint8_t*>(&systray_win_id), 1);
 
-  Colormap colormap = XCreateColormap(xdisplay, win_id,
-      panel_attributes.visual, AllocNone);
-  printf("%d\n", __LINE__);
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-
-  {
-    XSetWindowAttributes wc;
-    wc.override_redirect = True;
-    wc.background_pixel = BlackPixelOfScreen(xscreen);
-    wc.border_pixel = BlackPixelOfScreen(xscreen);
-    wc.event_mask = ExposureMask;
-    wc.colormap = colormap;
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-
-    win_inter = XCreateWindow(xdisplay, RootWindowOfScreen(xscreen), 0, 0,
-        1, 1, 0, panel_attributes.depth, InputOutput,
-        panel_attributes.visual,
-        CWOverrideRedirect | CWBackPixel | CWBorderPixel | CWEventMask
-            | CWColormap, &wc);
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-
-    /*** GRRRR ***/
-    Atom WM_TRANSIENT_FOR = XInternAtom(xdisplay, "WM_TRANSIENT_FOR",
-        False);
-    Atom WINDOW = XInternAtom(xdisplay, "WINDOW", False);
-    XChangeProperty(xdisplay, win_inter, WM_TRANSIENT_FOR, WINDOW, 32,
-    PropModeReplace, reinterpret_cast<uint8_t*>(&systray_win_id), 1);
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-  }
-
-  {
-    int red_prec, green_prec, blue_prec, depth;
-    GdkVisual *visual;
-    visual = gdk_x11_screen_lookup_visual(screen,
-        window_attributes.visual->visualid);
-
-    gdk_visual_get_red_pixel_details(visual, NULL, NULL, &red_prec);
-    gdk_visual_get_green_pixel_details(visual, NULL, NULL, &green_prec);
-    gdk_visual_get_blue_pixel_details(visual, NULL, NULL, &blue_prec);
-    depth = gdk_visual_get_depth(visual);
-
-    int visual_has_alpha = red_prec + blue_prec + green_prec < depth;
-
-    printf("visual_has_alpha: %d\n", visual_has_alpha);
-  }
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-
-  printf("OO: %d %d\n", win_id, systray_win_id);
-  XUnmapWindow(xdisplay, win_id);
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-  XSelectInput(xdisplay, win_id,
-      StructureNotifyMask | PropertyChangeMask | EnterWindowMask
-          | FocusChangeMask);
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-  XReparentWindow(xdisplay, win_id, win_inter, 0, 0);
+  gdk_window_reparent(dock_gdk_window, container_gdk_window, 0, 0);
 
   printf("%s %d\n", __FUNCTION__, __LINE__);
-  gdk_window_add_filter(win_sub, &call_python_filter, (gpointer) panel);
+  gdk_window_add_filter(dock_gdk_window, &call_python_filter, (gpointer) panel);
 
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-  XMapWindow(xdisplay, win_id);
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-  XMapWindow(xdisplay, win_inter);
+  gdk_window_show_unraised(dock_gdk_window);
+  gdk_window_show_unraised(container_gdk_window);
 
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-  XSync(xdisplay, False);
-
-  printf("%s %d\n", __FUNCTION__, __LINE__);
-///g_object_unref(win_sub) ???
-  xembed_send(display, win_id, XEMBED_EMBEDDED_NOTIFY, 0, systray_win_id, 1);
-  xembed_send(display, win_id, XEMBED_WINDOW_ACTIVATE, 0, 0, 0);
-  xembed_send(display, win_id, XEMBED_FOCUS_IN, XEMBED_FOCUS_CURRENT, 0, 0);
+  xembed_send(gdk_display, win_id, XEMBED_EMBEDDED_NOTIFY, 0, systray_win_id, 1);
+  xembed_send(gdk_display, win_id, XEMBED_WINDOW_ACTIVATE, 0, 0, 0);
+  xembed_send(gdk_display, win_id, XEMBED_FOCUS_IN, XEMBED_FOCUS_CURRENT, 0, 0);
   printf("%s %d\n", __FUNCTION__, __LINE__);
 
-  //gdk_window_set_background_pattern (window, NULL);
-  gdk_x11_display_error_trap_pop_ignored(display);
+  gdk_x11_display_error_trap_pop_ignored(gdk_display);
+  gdk_display_flush(gdk_display);
 
   //Py_RETURN_NONE;
-  return Py_BuildValue("l", win_inter);
+  return Py_BuildValue("l", gdk_x11_window_get_xid(container_gdk_window));
 }
 
 #define TPL_FUNCTION(name) {#name, py_##name, METH_VARARGS, "Not documented"}
