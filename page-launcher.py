@@ -71,7 +71,13 @@ import pkg_resources
 print(__name__)
 print(sys.exec_prefix)
 print(sys.prefix)
+
 data_path = pkg_resources.resource_filename(__name__, '../share/page-launcher')
+
+if not os.path.exists(data_path):
+    print("FIXME find better solution !")
+    data_path = "./data"
+
 print(data_path)
 
 def sig_int_handler(n):
@@ -897,7 +903,7 @@ class PanelShutdown(PanelIcon):
             {'text': "Log Out", 'obj': Logout()},
             {'text': "Lock", 'obj': Lock()},
             {'text': "Sleep", 'obj': Sleep()},
-            {'text': "Reboot", 'obj': Reboot()},
+            #{'text': "Reboot", 'obj': Reboot()},
         ]
 
         self.panel.sub_menu(self.get_y(), menu_list, event.time)
@@ -1391,21 +1397,28 @@ class PanelView(Clutter.Stage):
         self.wnck_screen.force_update()
         apps = self.wnck_screen.get_windows_stacked()
         # print(apps)
-        # for app in apps:
-        #	print('----')
-        #	print(app.get_name())
-        #	#print(app.get_icon_name())
-        #	print(app.get_class_group_name())
-        #	#print(app.get_class_instance_name())
-        #	print(app.get_xid())
-        #	##print(app.get_session_id_utf8())
-        #	print(app.is_sticky())
+        for app in apps:
+            print('----')
+            print(app.get_name())
+            #print(app.get_icon_name())
+            print(app.get_class_group_name())
+            #print(app.get_class_instance_name())
+            print(app.get_xid())
+            ##print(app.get_session_id_utf8())
+            print(app.is_sticky())
+            print(app.get_window_type())
+            print(app.get_transient())
 
         self.update_cnt += 1
         print("==================================")
         # Loop on Wnck apps
         for app in apps:
-            if not app.is_sticky():
+            b_app_valid = True
+            if app.is_sticky():
+                b_app_valid = False
+            if app.get_window_type() != Wnck.WindowType.NORMAL:
+                b_app_valid = False
+            if b_app_valid:
                 # print(app.get_xid())
                 xid = app.get_xid()
                 name = app.get_name()
@@ -1730,6 +1743,8 @@ class Sleep():
 class Shutdown():
     def activate(self, event_time):
         bus = dbus.SystemBus()
+        subprocess.Popen(shlex.split("gnome-session-quit --power-off"))
+        return
         try:
             i = dbus_login1(bus)
             if i.CanPowerOff() == "yes":
@@ -1768,13 +1783,14 @@ class Reboot():
 class Logout():
     # dbus-send --session --type=method_call --print-reply --dest=org.gnome.SessionManager /org/gnome/SessionManager org.gnome.SessionManager.Logout uint32:1
     def activate(self, event_time):
-        bus = dbus.SessionBus()
-        try:
-            i = dbus_mate(bus)
-            print("logout")
-            i.Logout(1)
-        except:
-            raise Exception("logout somehow doesn't work.")
+        subprocess.Popen(shlex.split("gnome-session-quit --logout"))
+        #bus = dbus.SessionBus()
+        #try:
+        #    i = dbus_mate(bus)
+        #    print("logout")
+        #    i.Logout(1)
+        #except:
+        #    raise Exception("logout somehow doesn't work.")
 
 
 class Lock():
