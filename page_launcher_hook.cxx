@@ -378,6 +378,9 @@ static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
 
   GdkWindow * window = GDK_WINDOW(pygobject_get(pyobj_win));
   GdkDisplay * display = GDK_DISPLAY(pygobject_get(pyobj_display));
+
+  gdk_x11_display_error_trap_push(display);
+
   guint32 timestamp = gdk_x11_get_server_time(window);
 
   GdkScreen * screen = gdk_display_get_default_screen(display);
@@ -387,7 +390,6 @@ static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
   GdkAtom selection_atom = gdk_atom_intern(selection_atom_name, FALSE);
   g_free(selection_atom_name);
 
-  XSetErrorHandler(error_handler);
 
   /* Update Tray Manager */
   {
@@ -416,6 +418,8 @@ static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
       SubstructureNotifyMask);
   gdk_window_add_filter(window, &call_python_filter, (gpointer) panel);
 
+  gdk_x11_display_error_trap_pop_ignored(display);
+
   Py_RETURN_NONE;
 }
 
@@ -440,6 +444,98 @@ static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
 #define XEMBED_FOCUS_LAST               2
 
 //void xembed_send(GdkDisplay * display, uint32_t win_id, uint32_t in1, uint32_t in2=0, uint32_t in3=0, uint32_t in4=0);
+
+inline bool _send_client_message_get_data(PyObject * data, long & dest) {
+	auto gdk_display = gdk_display_get_default();
+
+
+	if (PyUnicode_Check(data)) {
+		// if data is a string, we guess that the data is Atom.
+		// Do not unalocate
+		char * atom_name = PyUnicode_AsUTF8(data);
+		dest = gdk_x11_get_xatom_by_name_for_display(gdk_display, atom_name);
+		return true;
+	} else if (PyLong_Check(data)) {
+		// if data is a long just use it.
+		dest = PyLong_AsLong(data);
+		return true;
+	}
+
+	return false;
+}
+
+static PyObject * py_send_client_message(PyObject * self, PyObject * args)
+{
+	PyObject * py_window;
+	PyObject * py_message_type;
+	PyObject * py_data0;
+	PyObject * py_data1;
+	PyObject * py_data2;
+	PyObject * py_data3;
+	PyObject * py_data4;
+	XEvent ev = { 0 };
+
+	auto gdk_display = gdk_display_get_default();
+
+	if (!PyArg_ParseTuple(args, "OOOOOOO", &py_window, &py_message_type,
+			&py_data0, &py_data1, &py_data2, &py_data3, &py_data4))
+		return NULL;
+
+	GdkWindow * window = nullptr;
+	if (pygobject_check(py_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		window = GDK_WINDOW(pygobject_get(py_window));
+	} else if (PyLong_Check(py_window)) {
+		window = gdk_x11_window_foreign_new_for_display(gdk_display, PyLong_AsLong(py_window));
+		if (window == nullptr) { // window
+			printf("WARNING: GdkWindow not found from XID\n");
+			Py_RETURN_NONE;
+		}
+	} else {
+		PyErr_SetString(PyExc_TypeError, "arg0 must be a GdkWindow or XID");
+		return NULL;
+	}
+
+	Atom message_type = 0;
+	if (PyUnicode_Check(py_message_type)) {
+		// Do not unalocate
+		char * atom_name = PyUnicode_AsUTF8(py_message_type);
+		message_type = gdk_x11_get_xatom_by_name_for_display(gdk_display, atom_name);
+	} else {
+		PyErr_SetString(PyExc_TypeError, "arg1 must be a string of x11 atom name");
+		return NULL;
+	}
+
+	if (not _send_client_message_get_data(py_data0, ev.xclient.data.l[0])) {
+		PyErr_SetString(PyExc_TypeError, "arg2 must be an int or a string of x11 atom name");
+		return NULL;
+	}
+
+	if (not _send_client_message_get_data(py_data1, ev.xclient.data.l[1])) {
+		PyErr_SetString(PyExc_TypeError, "arg3 must be an int or a string of x11 atom name");
+		return NULL;
+	}
+
+	if (not _send_client_message_get_data(py_data2, ev.xclient.data.l[2])) {
+		PyErr_SetString(PyExc_TypeError, "arg4 must be an int or a string of x11 atom name");
+		return NULL;
+	}
+
+	if (not _send_client_message_get_data(py_data3, ev.xclient.data.l[3])) {
+		PyErr_SetString(PyExc_TypeError, "arg5 must be an int or a string of x11 atom name");
+		return NULL;
+	}
+
+	if (not _send_client_message_get_data(py_data4, ev.xclient.data.l[4])) {
+		PyErr_SetString(PyExc_TypeError, "arg6 must be an int or a string of x11 atom name");
+		return NULL;
+	}
+
+	ev.xclient.window = gdk_x11_window_get_xid(window);
+	ev.xclient.message_type = message_type;
+
+	XSendEvent(GDK_DISPLAY_XDISPLAY(gdk_display), ev.xclient.window, False, NoEventMask, &ev);
+
+}
 
 void xembed_send(GdkDisplay * display, uint32_t win_id, uint32_t in1,
     uint32_t in2, uint32_t in3, uint32_t in4) {
@@ -724,6 +820,7 @@ static PyMethodDef methods[] = {
     TPL_FUNCTION_DOC(set_system_tray_filter, "implement X11 event filtering"),
     TPL_FUNCTION_DOC(set_system_tray_orientation, "set _NET_SYSTEM_TRAY_ORIENTATION"),
     TPL_FUNCTION_DOC(set_system_tray_visual, "set _NET_SYSTEM_TRAY_VISUAL"),
+	TPL_FUNCTION_DOC(send_client_message, "Send a x11 client message"),
     { NULL, NULL, 0, NULL } // sentinel
 };
 
