@@ -23,7 +23,7 @@ def pkgconfig(*packages, **kw):
 
 params = pkgconfig('pygobject-3.0', 'clutter-glx-1.0', 'gdk-x11-3.0')
 params['extra_compile_args'] = ['-std=c++11', '-ggdb']
-module1 = Extension('PageLauncherHook', sources = ['page_launcher_hook.cxx'], **params)
+module1 = Extension('PageLauncherHook', sources = ['page_launcher_hook.cxx', "gdkxevent/xevent.cxx", "gdkxevent/xanyevent.cxx", "gdkxevent/xclientmessageevent.cxx"], **params)
 
 setup (name = 'PageLauncher',
     version = '1.0',

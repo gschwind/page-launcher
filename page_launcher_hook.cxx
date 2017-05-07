@@ -13,6 +13,10 @@
 #include <memory>
 #include <map>
 
+#include "gdkxevent/xevent.hxx"
+#include "gdkxevent/xanyevent.hxx"
+#include "gdkxevent/xclientmessageevent.hxx"
+
 PyObject * panel = NULL; // the function to call
 
 struct python_call_filter_data {
@@ -319,20 +323,23 @@ static GdkFilterReturn _python_call_filter(GdkXEvent *gdkxevent, GdkEvent *event
 {
 	python_call_filter_data * ctx =
 			reinterpret_cast<python_call_filter_data *>(data);
+	auto xevent = reinterpret_cast<XEvent*>(gdkxevent);
 
 	PyGILState_STATE gstate = PyGILState_Ensure();
 
 	PyObject * py_gdk_event = PyObject_CallFunctionObjArgs(get_module_state(ctx->module)->gdk_event_type, NULL);
 	GdkEvent * gdk_event = pyg_pointer_get(py_gdk_event, GdkEvent);
-	std::copy(event, event+1, gdk_event);
+
+	PyObject * py_xevent = PyObject_CallFunctionObjArgs(reinterpret_cast<PyObject*>(&page_XEventType), NULL);
+	std::copy(xevent, xevent+1, &reinterpret_cast<page_XEvent*>(py_xevent)->event);
 
 	PyObject * py_ret = NULL;
 	if (PyMethod_Check(ctx->func)) {
 		PyObject * func = PyMethod_Function(ctx->func);
 		PyObject * self = PyMethod_Self(ctx->func);
-		py_ret = PyObject_CallFunctionObjArgs(func, self, py_gdk_event, NULL);
+		py_ret = PyObject_CallFunctionObjArgs(func, self, py_xevent, py_gdk_event, NULL);
 	} else {
-		py_ret = PyObject_CallFunctionObjArgs(ctx->func, py_gdk_event, NULL);
+		py_ret = PyObject_CallFunctionObjArgs(ctx->func, py_xevent, py_gdk_event, NULL);
 	}
 
 	GdkFilterReturn ret = GDK_FILTER_CONTINUE;
@@ -348,6 +355,12 @@ static GdkFilterReturn _python_call_filter(GdkXEvent *gdkxevent, GdkEvent *event
 		ret = static_cast<GdkFilterReturn>(PyLong_AsLong(py_ret));
 	}
 
+	if(ret == GDK_FILTER_TRANSLATE) {
+		std::copy(gdk_event, gdk_event+1, event);
+	}
+
+	Py_DECREF(py_gdk_event);
+	Py_DECREF(py_xevent);
 	Py_XDECREF(py_ret);
 	PyGILState_Release(gstate);
 	return ret;
@@ -1144,6 +1157,21 @@ PyMODINIT_FUNC PyInit_PageLauncherHook(void)
   Py_INCREF(error_obj);
   PyModule_AddObject(m, "error", error_obj);
   get_module_state(m)->Error = error_obj;
+
+  if (PyType_Ready(&page_XEventType) >= 0) {
+          Py_INCREF(&page_XEventType);
+          PyModule_AddObject(m, "XEvent", (PyObject*)&page_XEventType);
+  }
+
+  if (PyType_Ready(&page_XAnyEventType) >= 0) {
+          Py_INCREF(&page_XAnyEventType);
+          PyModule_AddObject(m, "XAnyEvent", (PyObject*)&page_XAnyEventType);
+  }
+
+  if (PyType_Ready(&page_XClientMessageEventType) >= 0) {
+          Py_INCREF(&page_XClientMessageEventType);
+          PyModule_AddObject(m, "XClientMessageEvent", (PyObject*)&page_XAnyEventType);
+  }
 
   return m;
 
