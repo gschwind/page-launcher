@@ -12,11 +12,51 @@
 
 #include <memory>
 #include <map>
+#include <string>
 
 #include "gdkxevent/xevent.hxx"
 #include "gdkxevent/xanyevent.hxx"
 #include "gdkxevent/xclientmessageevent.hxx"
 #include "gdkxevent/xmotionevent.hxx"
+#include "gdkxevent/xdestroywindowevent.hxx"
+
+static std::map<std::string, int> _xevent_types = {
+	{ "KeyPress", 2 },
+	{ "KeyRelease", 3 },
+	{ "ButtonPress", 4 },
+	{ "ButtonRelease", 5 },
+	{ "MotionNotify", 6 },
+	{ "EnterNotify", 7 },
+	{ "LeaveNotify", 8 },
+	{ "FocusIn", 9 },
+	{ "FocusOut", 10 },
+	{ "KeymapNotify", 11 },
+	{ "Expose", 12 },
+	{ "GraphicsExpose", 13 },
+	{ "NoExpose", 14 },
+	{ "VisibilityNotify", 15 },
+	{ "CreateNotify", 16 },
+	{ "DestroyNotify", 17 },
+	{ "UnmapNotify", 18 },
+	{ "MapNotify", 19 },
+	{ "MapRequest", 20 },
+	{ "ReparentNotify", 21 },
+	{ "ConfigureNotify", 22 },
+	{ "ConfigureRequest", 23 },
+	{ "GravityNotify", 24 },
+	{ "ResizeRequest", 25 },
+	{ "CirculateNotify", 26 },
+	{ "CirculateRequest", 27 },
+	{ "PropertyNotify", 28 },
+	{ "SelectionClear", 29 },
+	{ "SelectionRequest", 30 },
+	{ "SelectionNotify", 31 },
+	{ "ColormapNotify", 32 },
+	{ "ClientMessage", 33 },
+	{ "MappingNotify", 34 },
+	{ "GenericEvent", 35 }
+};
+
 
 PyObject * panel = NULL; // the function to call
 
@@ -1177,6 +1217,15 @@ PyMODINIT_FUNC PyInit_PageLauncherHook(void)
   if (PyType_Ready(&page_XMotionEventType) >= 0) {
           Py_INCREF(&page_XMotionEventType);
           PyModule_AddObject(m, "XMotionEvent", (PyObject*)&page_XMotionEventType);
+  }
+
+  if (PyType_Ready(&page_XDestroyWindowEventType) >= 0) {
+          Py_INCREF(&page_XDestroyWindowEventType);
+          PyModule_AddObject(m, "XDestroyWindowEvent", (PyObject*)&page_XDestroyWindowEventType);
+  }
+
+  for(auto &x: _xevent_types) {
+	  PyModule_AddObject(m, x.first.c_str(), PyLong_FromLong(x.second));
   }
 
   return m;

@@ -1,7 +1,7 @@
 /*
  * Copyright (2017) Benoit Gschwind
  *
- * xevent.cxx is part of page-compositor.
+ * gdkxevent.cxx is part of page-compositor.
  *
  * page-compositor is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,64 +18,50 @@
  *
  */
 
-#include "xevent.hxx"
-
-#include "xanyevent.hxx"
-#include "xclientmessageevent.hxx"
-#include "xmotionevent.hxx"
 #include "xdestroywindowevent.hxx"
 
 #include "attr_handler.hxx"
 
-static void page_XEvent_dealloc(PyObject * self) {
+template<>
+_attr_handler<page_XDestroyWindowEvent>::_map_type _attr_handler<page_XDestroyWindowEvent>::map = {
+		DEF_MAP_FUNCTION(XDestroyWindowEvent, xdestroywindow, type),
+		DEF_MAP_FUNCTION(XDestroyWindowEvent, xdestroywindow, serial),
+		DEF_MAP_FUNCTION(XDestroyWindowEvent, xdestroywindow, send_event),
+		DEF_MAP_FUNCTION(XDestroyWindowEvent, xdestroywindow, event),
+		DEF_MAP_FUNCTION(XDestroyWindowEvent, xdestroywindow, window)
+};
+
+static void page_XDestroyWindowEvent_dealloc(PyObject * self) {
         Py_TYPE(self)->tp_free(self);
 }
 
-static PyObject * page_XEvent_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
+static PyObject * page_XDestroyWindowEvent_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
         return type->tp_alloc(type, 0);
 }
 
-static int page_XEvent_init(PyObject * _self, PyObject *args, PyObject *kwds) {
-	auto self = reinterpret_cast<page_XEvent*>(_self);
+static int page_XDestroyWindowEvent_init(PyObject * _self, PyObject *args, PyObject *kwds)
+{
+	auto self = reinterpret_cast<page_XDestroyWindowEvent*>(_self);
+	PyObject * py_xevent;
+
+	if (!PyArg_ParseTuple(args, "O", &py_xevent))
+		return -1;
+
+	if(Py_TYPE(py_xevent) != &page_XEventType)
+		return -1;
+
+	Py_INCREF(py_xevent);
+	self->ref_event = reinterpret_cast<page_XEvent*>(py_xevent);
 
 	return 0;
 }
 
-static std::map<std::string, PyObject *> const _get_attr_type_map = {
-		{"XAnyEvent", reinterpret_cast<PyObject*>(&page_XAnyEventType)},
-		{"XClientMessageEvent", reinterpret_cast<PyObject*>(&page_XClientMessageEventType)},
-		{"XMotionEvent", reinterpret_cast<PyObject*>(&page_XMotionEventType)},
-		{"XDestroyWindowEvent", reinterpret_cast<PyObject*>(&page_XDestroyWindowEventType)},
-};
-
-static PyObject * xevent_get_attr(PyObject* o, PyObject * _attr) {
-	std::string attr = PyUnicode_AsUTF8(_attr);
-
-	auto x = _get_attr_type_map.find(attr);
-	if(x != _get_attr_type_map.end()) {
-		return PyObject_CallFunctionObjArgs(x->second, o, NULL);
-	} else if (attr == "type") {
-		return PyLong_FromLong(reinterpret_cast<page_XEvent*>(o)->event.type);
-	}
-
-	return NULL;
-}
-
-static int xevent_set_attr(PyObject* o, PyObject * _attr, PyObject * value) {
-	std::string attr = PyUnicode_AsUTF8(_attr);
-
-	// TODO
-	// currently forbiden.
-
-	return -1;
-}
-
-PyTypeObject page_XEventType = {
+PyTypeObject page_XDestroyWindowEventType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "PageLauncherHook.XEvent",             /* tp_name */
-    sizeof(page_XEvent), /* tp_basicsize */
+    "PageLauncherHook.XDestroyWindowEvent",             /* tp_name */
+    sizeof(page_XDestroyWindowEvent), /* tp_basicsize */
     0,                         /* tp_itemsize */
-	page_XEvent_dealloc,                         /* tp_dealloc */
+	page_XDestroyWindowEvent_dealloc,                         /* tp_dealloc */
     0,                         /* tp_print */
     0,                         /* tp_getattr */
     0,                         /* tp_setattr */
@@ -87,11 +73,11 @@ PyTypeObject page_XEventType = {
     0,                         /* tp_hash  */
     0,                         /* tp_call */
     0,                         /* tp_str */
-	xevent_get_attr,           /* tp_getattro */
-	xevent_set_attr,           /* tp_setattro */
+	_attr_handler<page_XDestroyWindowEvent>::get_attr,           /* tp_getattro */
+	_attr_handler<page_XDestroyWindowEvent>::set_attr,           /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,        /* tp_flags */
-    "PageLauncherHook.XEvent objects",           /* tp_doc */
+    "PageLauncherHook.XDestroyWindowEvent objects",           /* tp_doc */
     0,                         /* tp_traverse */
     0,                         /* tp_clear */
     0,                         /* tp_richcompare */
@@ -106,9 +92,8 @@ PyTypeObject page_XEventType = {
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    page_XEvent_init, /* tp_init */
+    page_XDestroyWindowEvent_init, /* tp_init */
     0,                         /* tp_alloc */
-	page_XEvent_new,              /* tp_new */
-
+	page_XDestroyWindowEvent_new,              /* tp_new */
 };
 
