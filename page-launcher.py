@@ -1331,11 +1331,12 @@ class PanelTray(Clutter.Group):
         attr.visual = self.gdk_visual
         attr.override_redirect = True
         attr.wclass = Gdk.WindowWindowClass.INPUT_OUTPUT
-        attr.window_type = Gdk.WindowType.CHILD
+        attr.window_type = Gdk.WindowType.TEMP
+        attr.type_hint = Gdk.WindowTypeHint.NORMAL
         GDK_WA = Gdk.WindowAttributesType
-        gdk_container_window = Gdk.Window(self.window, attr, GDK_WA.X|GDK_WA.Y|GDK_WA.VISUAL|GDK_WA.NOREDIR)
-        #gdk_container_window.stick()
-        #gdk_container_window.set_transient_for(self.window)
+        gdk_container_window = Gdk.Window(display.get_default_screen().get_root_window(), attr, GDK_WA.X|GDK_WA.Y|GDK_WA.VISUAL|GDK_WA.NOREDIR|GDK_WA.TYPE_HINT)
+        gdk_container_window.stick()
+        gdk_container_window.set_transient_for(self.window)
         gdk_container_window.set_background_rgba(Gdk.RGBA(1.0, 0.0, 0.0, 0.5))
         gdk_dock_window.reparent(gdk_container_window, 0, 0)
         gdk_container_window.show()
