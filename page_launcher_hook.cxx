@@ -16,6 +16,7 @@
 #include "gdkxevent/xevent.hxx"
 #include "gdkxevent/xanyevent.hxx"
 #include "gdkxevent/xclientmessageevent.hxx"
+#include "gdkxevent/xmotionevent.hxx"
 
 PyObject * panel = NULL; // the function to call
 
@@ -1170,7 +1171,12 @@ PyMODINIT_FUNC PyInit_PageLauncherHook(void)
 
   if (PyType_Ready(&page_XClientMessageEventType) >= 0) {
           Py_INCREF(&page_XClientMessageEventType);
-          PyModule_AddObject(m, "XClientMessageEvent", (PyObject*)&page_XAnyEventType);
+          PyModule_AddObject(m, "XClientMessageEvent", (PyObject*)&page_XClientMessageEventType);
+  }
+
+  if (PyType_Ready(&page_XMotionEventType) >= 0) {
+          Py_INCREF(&page_XMotionEventType);
+          PyModule_AddObject(m, "XMotionEvent", (PyObject*)&page_XMotionEventType);
   }
 
   return m;

@@ -31,66 +31,79 @@ struct identity { using type = T; };
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, char identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, short identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, int identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, long identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, long long identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, unsigned char identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromUnsignedLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, unsigned short identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromUnsignedLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, unsigned int identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromUnsignedLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, unsigned long identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromUnsignedLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, unsigned long long identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyLong_FromUnsignedLong(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, float identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyFloat_FromDouble(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, double identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyFloat_FromDouble(o->*member);
 }
 
 template<typename T0>
 PyObject * _get_attr(T0 * o, long double identity<T0>::type::*member) {
+	//printf("call %s %d\n", __PRETTY_FUNCTION__, o->*member);
 	return PyFloat_FromDouble(o->*member);
 }
 
