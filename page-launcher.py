@@ -59,6 +59,25 @@ SYSTEM_TRAY_ORIENTATION_HORZ = 0
 SYSTEM_TRAY_ORIENTATION_VERT = 1
 
 
+XEMBED_EMBEDDED_NOTIFY         = 0
+XEMBED_WINDOW_ACTIVATE         = 1
+XEMBED_WINDOW_DEACTIVATE       = 2
+XEMBED_REQUEST_FOCUS           = 3
+XEMBED_FOCUS_IN                = 4
+XEMBED_FOCUS_OUT               = 5
+XEMBED_FOCUS_NEXT              = 6
+XEMBED_FOCUS_PREV              = 7
+XEMBED_MODALITY_ON             = 10
+XEMBED_MODALITY_OFF            = 11
+XEMBED_REGISTER_ACCELERATOR    = 12
+XEMBED_UNREGISTER_ACCELERATOR  = 13
+XEMBED_ACTIVATE_ACCELERATOR    = 14
+
+XEMBED_FOCUS_CURRENT           = 0
+XEMBED_FOCUS_FIRST             = 1
+XEMBED_FOCUS_LAST              = 2
+
+
 font_comment = "Sans 8"
 color_comment = Clutter.Color.new(200, 200, 200, 255)
 
@@ -1138,9 +1157,6 @@ class PanelTray(Clutter.Group):
         self.atom_message_data = GdkX11.x11_atom_to_xatom_for_display(display,
                                                                       Gdk.atom_intern("_NET_SYSTEM_TRAY_MESSAGE_DATA",
                                                                                       False))
-        timestamp = GdkX11.x11_get_server_time(self.window)
-        # toto = Gdk.selection_owner_get_for_display(display, selection_atom)
-        # print(toto)
         res = Gdk.selection_owner_set_for_display(display,
                                                   self.window,
                                                   selection_atom,
@@ -1177,12 +1193,9 @@ class PanelTray(Clutter.Group):
             visualid = PageLauncherHook.XVisualIDFromVisual(self.x11_visual)
             print(visualid)
 
-            PageLauncherHook.property_change(self.window, Gdk.atom_intern("_NET_SYSTEM_TRAY_VISUAL", False), Gdk.atom_intern("VISUALID", False), 32, Gdk.PropMode.REPLACE, struct.pack("I", visualid), 1)
-
-            #PageLauncherHook.set_system_tray_visual(self.window, display)
-
+            PageLauncherHook.property_change(self.window, "_NET_SYSTEM_TRAY_VISUAL", "VISUALID", 32, Gdk.PropMode.REPLACE, struct.pack("I", visualid), 1)
             # This should sent on SelectionNotify.
-            PageLauncherHook.send_client_message(root_window, "MANAGER", 0, GdkX11.x11_atom_to_xatom_for_display(display, selection_atom), self.window.get_xid(), 0, 0)
+            PageLauncherHook.send_client_message(root_window, "MANAGER", 0, selection_atom, self.window.get_xid(), 0, 0)
 
             #PageLauncherHook.set_system_tray_filter(self.window, display, self)
             # self.window.add_filter(self.toto)
@@ -1195,15 +1208,15 @@ class PanelTray(Clutter.Group):
             if xevent.message_type == self.atom_opcode:
                 data = xevent.data_as_long
                 if data[1] == SYSTEM_TRAY_REQUEST_DOCK:
-                    self.dock_request(data[2], xevent.window)
+                    self.dock_request(data[2])
                 elif data[1] == SYSTEM_TRAY_BEGIN_MESSAGE:
                     pass
                 elif data[1] == SYSTEM_TRAY_CANCEL_MESSAGE:
-                    self.message_cancel(data[2], xevent.window)
+                    self.message_cancel(xevent.window)
                 return Gdk.FilterReturn.REMOVE
         elif xevent.type == PageLauncherHook.DestroyNotify:
             xevent = xevent.XDestroyWindowEvent
-            self.undock_request(xevent.event. xevent.window)
+            self.undock_request(xevent.window)
         elif xevent.type == PageLauncherHook.SelectionClear:
             print("SelectionClear")
             # TODO
@@ -1220,9 +1233,7 @@ class PanelTray(Clutter.Group):
         return Gdk.FilterReturn.CONTINUE
 
     def _set_system_tray_orientation(self, orientation):
-        CARDINAL = Gdk.atom_intern("CARDINAL", False) # TODO: cache
-        _NET_SYSTEM_TRAY_ORIENTATION = Gdk.atom_intern("_NET_SYSTEM_TRAY_ORIENTATION", False) # TODO: cache
-        PageLauncherHook.property_change(self.window, _NET_SYSTEM_TRAY_ORIENTATION, CARDINAL, 32, Gdk.PropMode.REPLACE, struct.pack("i", orientation), 1)
+        PageLauncherHook.property_change(self.window, "_NET_SYSTEM_TRAY_ORIENTATION", "CARDINAL", 32, Gdk.PropMode.REPLACE, struct.pack("i", orientation), 1)
 
 
     def get_size_y(self):
@@ -1248,42 +1259,116 @@ class PanelTray(Clutter.Group):
         ind = 0
         tmp_y = self.margin_ico_y
         pos_x = self.update_pos_x(min(len(self.dock_list) - ind, self.max_col))
-        for win_id, win_inter in self.dock_list.items():
-            print("Move tray")
+        for wid in self.dock_list:
+            gdk_container_window, gdk_dock_window = self.dock_list[wid]
+            print("Move tray ", hex(wid))
+            if gdk_container_window.is_destroyed():
+                print("WARNING: unexpected destroyed dock")
+                continue
+            if gdk_dock_window.is_destroyed():
+                print("WARNING: unexpected destroyed dock")
+                continue
 
-            PageLauncherHook.move_tray(self.window,
-                                       ClutterGdk.get_default_display(),
-                                       win_id,
-                                       win_inter,
-                                       int(pos_x[ind % self.max_col] + self.sub_offset),
-                                       int(tmp_y + y),
-                                       self.sz_x_ico,
-                                       self.sz_y_ico)
+            x = int(pos_x[ind % self.max_col] + self.sub_offset)
+            y = int(tmp_y + y)
+            w = self.sz_x_ico
+            h = self.sz_y_ico
+
+            print(x, y, w, h)
+
+            display = ClutterGdk.get_default_display()
+            display.error_trap_push()
+            gdk_container_window.move_resize(x, y, w, h)
+            gdk_dock_window.move_resize(0, 0, w, h)
+
+            PageLauncherHook.send_client_message(
+                gdk_dock_window,
+                "_XEMBED",
+                0,
+                XEMBED_EMBEDDED_NOTIFY,
+                0, gdk_container_window.get_xid(), 1
+            )
+
+            #gdk_dock_window.show()
+
+            display.error_trap_pop_ignored()
             if ind % self.max_col == self.max_col - 1:
                 tmp_y = tmp_y + self.sz_y_ico + self.margin_ico_y
                 pos_x = self.update_pos_x(min(len(self.dock_list) - ind - 1, self.max_col))
             ind += 1
 
-    def undock_request(self, socket_id, window):
-        print('++undock request: ' + hex(socket_id))
-        # print(socket_id)
-        # print(window)
-        if socket_id in self.dock_list:
-            win_inter = self.dock_list[socket_id]
-            PageLauncherHook.undock_tray(self.window, ClutterGdk.get_default_display(), socket_id, win_inter)
-            del self.dock_list[socket_id]
-        else:
-            print('unknown id:' + hex(socket_id))
-        print('--undock request: ' + hex(socket_id))
+    def undock_request(self, wid):
+        print('++undock request: ' + hex(wid))
+        if wid not in self.dock_list:
+            print('unknown id:' + hex(wid))
+            print('--undock request: ' + hex(wid))
+            return
+        gdk_container_window, gdk_dock_window = self.dock_list[wid]
+        display = ClutterGdk.get_default_display()
+        display.error_trap_push()
+        gdk_container_window.destroy()
+        display.error_trap_pop_ignored()
+        del self.dock_list[wid]
+        print('--undock request: ' + hex(wid))
 
-    def dock_request(self, socket_id, window):
-        print('++dock request: ' + hex(socket_id))
-        # print(socket_id)
-        # print(window)
-        win_inter = PageLauncherHook.dock_tray(self.window, ClutterGdk.get_default_display(), socket_id)
-        if win_inter:
-            self.dock_list[socket_id] = win_inter
-        print('--dock request: ' + hex(socket_id))
+    def dock_request(self, wid):
+        print('++dock request: ' + hex(wid))
+        display = ClutterGdk.get_default_display()
+        display.error_trap_push()
+        gdk_dock_window = GdkX11.X11Window.foreign_new_for_display(display, wid)
+        PageLauncherHook.add_filter(gdk_dock_window, self._filter_events)
+        event_mask = gdk_dock_window.get_events()
+        gdk_dock_window.set_events(event_mask|Gdk.EventMask.STRUCTURE_MASK|Gdk.EventMask.PROPERTY_CHANGE_MASK)
+        if gdk_dock_window.is_destroyed():
+            print('winid already destroy: ' + hex(wid))
+            print('--dock request: ' + hex(wid))
+        attr = Gdk.WindowAttr()
+        attr.event_mask = Gdk.EventMask.STRUCTURE_MASK|Gdk.EventMask.PROPERTY_CHANGE_MASK
+        attr.x = -42
+        attr.y = -42
+        attr.width = 100
+        attr.height = 100
+        attr.visual = self.gdk_visual
+        attr.override_redirect = True
+        attr.wclass = Gdk.WindowWindowClass.INPUT_OUTPUT
+        attr.window_type = Gdk.WindowType.CHILD
+        GDK_WA = Gdk.WindowAttributesType
+        gdk_container_window = Gdk.Window(self.window, attr, GDK_WA.X|GDK_WA.Y|GDK_WA.VISUAL|GDK_WA.NOREDIR)
+        #gdk_container_window.stick()
+        #gdk_container_window.set_transient_for(self.window)
+        gdk_container_window.set_background_rgba(Gdk.RGBA(1.0, 0.0, 0.0, 0.5))
+        gdk_dock_window.reparent(gdk_container_window, 0, 0)
+        gdk_container_window.show()
+        gdk_dock_window.show()
+
+        PageLauncherHook.send_client_message(
+            gdk_dock_window,
+            "_XEMBED",
+            0,
+            XEMBED_EMBEDDED_NOTIFY,
+            0, gdk_container_window.get_xid(), 1
+        )
+
+        PageLauncherHook.send_client_message(
+            gdk_dock_window,
+            "_XEMBED",
+            0,
+            XEMBED_WINDOW_ACTIVATE,
+            0, 0, 0
+        )
+
+        PageLauncherHook.send_client_message(
+            gdk_dock_window,
+            "_XEMBED",
+            0,
+            XEMBED_FOCUS_IN,
+            XEMBED_FOCUS_CURRENT,
+            0, 0
+        )
+
+        self.dock_list[wid] = (gdk_container_window, gdk_dock_window)
+        display.error_trap_pop_ignored()
+        print('--dock request: ' + hex(wid))
 
     def message_begin(self, socket_id, window):
         print('message begin')

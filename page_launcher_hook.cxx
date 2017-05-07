@@ -77,9 +77,48 @@ struct module_state {
 
 };
 
-inline module_state * get_module_state(PyObject * m) {
+inline module_state * _get_module_state(PyObject * m) {
 	return reinterpret_cast<module_state*>(PyModule_GetState(m));
 }
+
+inline GdkWindow * _get_safe_gdk_window(PyObject * py_window) {
+	GdkWindow * window = nullptr;
+
+	auto gdk_display = gdk_display_get_default();
+
+	if (pygobject_check(py_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
+		window = GDK_WINDOW(pygobject_get(py_window));
+	} else if (PyLong_Check(py_window)) {
+		window = gdk_x11_window_foreign_new_for_display(gdk_display, PyLong_AsLong(py_window));
+		if (window == nullptr) { // window
+			printf("WARNING: GdkWindow not found from XID\n");
+		}
+	}
+	return window;
+}
+
+inline GdkAtom _get_safe_gdk_atom(PyObject * self, PyObject * py_atom) {
+	GdkAtom gdk_atom = 0;
+
+	auto gdk_display = gdk_display_get_default();
+
+	if (PyUnicode_Check(py_atom)) {
+		// Do not unalocate
+		Py_ssize_t size;
+		char * atom_name = PyUnicode_AsUTF8AndSize(py_atom, &size);
+		printf("XXXXX `%s' %d\n", atom_name, size);
+		gdk_atom = gdk_atom_intern(atom_name, FALSE);
+	} else if (PyObject_IsInstance(py_atom, _get_module_state(self)->gdk_atom_type)) {
+		// Totally a guess, tested with following comented code.
+		gdk_atom = pyg_pointer_get(py_atom, struct _GdkAtom);
+		//auto test = gdk_x11_atom_to_xatom(property);
+		//printf("XXXX= %s\n", gdk_x11_get_xatom_name(test));
+	}
+
+	return gdk_atom;
+
+}
+
 
 static PyObject * py_print(PyObject * self, PyObject * args) {
   char * str;
@@ -212,7 +251,7 @@ static PyObject * py_XVisualIDFromVisual(PyObject * self, PyObject * args)
 	}
 
 	Visual * visual = nullptr;
-	if (PyObject_IsInstance(py_visual, get_module_state(self)->xlib_x11_visual_type)) {
+	if (PyObject_IsInstance(py_visual, _get_module_state(self)->xlib_x11_visual_type)) {
 		visual = pyg_pointer_get(py_visual, Visual);
 	} else {
 		PyErr_SetString(PyExc_TypeError, "arg0 must be a xlib.Visual");
@@ -389,7 +428,7 @@ static GdkFilterReturn _python_call_filter(GdkXEvent *gdkxevent, GdkEvent *event
 
 	PyGILState_STATE gstate = PyGILState_Ensure();
 
-	PyObject * py_gdk_event = PyObject_CallFunctionObjArgs(get_module_state(ctx->module)->gdk_event_type, NULL);
+	PyObject * py_gdk_event = PyObject_CallFunctionObjArgs(_get_module_state(ctx->module)->gdk_event_type, NULL);
 	GdkEvent * gdk_event = pyg_pointer_get(py_gdk_event, GdkEvent);
 
 	PyObject * py_xevent = PyObject_CallFunctionObjArgs(reinterpret_cast<PyObject*>(&page_XEventType), NULL);
@@ -438,17 +477,8 @@ static PyObject * py_add_filter(PyObject * self, PyObject * args)
 	if (!PyArg_ParseTuple(args, "OO", &py_window, &py_func))
 		return NULL;
 
-	GdkWindow * window = nullptr;
-	if (pygobject_check(py_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
-		window = GDK_WINDOW(pygobject_get(py_window));
-	} else if (PyLong_Check(py_window)) {
-		window = gdk_x11_window_foreign_new_for_display(gdk_display,
-				PyLong_AsLong(py_window));
-		if (window == nullptr) { // window
-			printf("WARNING: GdkWindow not found from XID\n");
-			Py_RETURN_NONE;
-		}
-	} else {
+	GdkWindow * window = _get_safe_gdk_window(py_window);
+	if (window == nullptr) {
 		PyErr_SetString(PyExc_TypeError, "arg0 must be a GdkWindow or XID");
 		return NULL;
 	}
@@ -465,7 +495,7 @@ static PyObject * py_add_filter(PyObject * self, PyObject * args)
 
 	handler->module = self;
 
-	get_module_state(self)->filter_handlers[py_func] = handler;
+	_get_module_state(self)->filter_handlers[py_func] = handler;
 	gdk_window_add_filter(window, &_python_call_filter, (gpointer) handler.get());
 
 	// As we return py_func we must increment ref to provide new reference to the caller.
@@ -499,12 +529,12 @@ static PyObject * py_remove_filter(PyObject * self, PyObject * args)
 		return NULL;
 	}
 
-	auto x = get_module_state(self)->filter_handlers.find(py_func);
-	if(x != get_module_state(self)->filter_handlers.end()) {
+	auto x = _get_module_state(self)->filter_handlers.find(py_func);
+	if(x != _get_module_state(self)->filter_handlers.end()) {
 		auto data = x->second;
 		gdk_window_remove_filter(window, &_python_call_filter, (gpointer)data.get());
 		Py_XDECREF(data->func);
-		get_module_state(self)->filter_handlers.erase(x);
+		_get_module_state(self)->filter_handlers.erase(x);
 	}
 
 	Py_RETURN_NONE;
@@ -659,6 +689,7 @@ static PyObject * py_set_system_tray_filter(PyObject * self, PyObject * args) {
 
 //void xembed_send(GdkDisplay * display, uint32_t win_id, uint32_t in1, uint32_t in2=0, uint32_t in3=0, uint32_t in4=0);
 
+
 static PyObject * py_property_change(PyObject * self, PyObject * args)
 {
 	PyObject * py_window;
@@ -672,54 +703,24 @@ static PyObject * py_property_change(PyObject * self, PyObject * args)
 
 	auto gdk_display = gdk_display_get_default();
 
-	printf("ZZZZ\n");
-
 	if (!PyArg_ParseTuple(args, "OOOOOOO", &py_window, &py_property,
 			&py_type, &py_format, &py_propmode, &py_data, &py_nelements))
 		return NULL;
 
-	GdkWindow * window = nullptr;
-	if (pygobject_check(py_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
-		window = GDK_WINDOW(pygobject_get(py_window));
-	} else if (PyLong_Check(py_window)) {
-		window = gdk_x11_window_foreign_new_for_display(gdk_display, PyLong_AsLong(py_window));
-		if (window == nullptr) { // window
-			printf("WARNING: GdkWindow not found from XID\n");
-			Py_RETURN_NONE;
-		}
-	} else {
+	GdkWindow * window = _get_safe_gdk_window(py_window);
+	if (window == nullptr) {
 		PyErr_SetString(PyExc_TypeError, "arg0 must be a GdkWindow or XID");
 		return NULL;
 	}
 
-	GdkAtom property = 0;
-	if (PyUnicode_Check(py_property)) {
-		// Do not unalocate
-		char * atom_name = PyUnicode_AsUTF8(py_property);
-		printf("XXXXX `%s'\n", atom_name);
-		property = gdk_atom_intern(atom_name, FALSE);
-	} else if (PyObject_IsInstance(py_property, get_module_state(self)->gdk_atom_type)) {
-		// Totally a guess, tested with following comented code.
-		property = pyg_pointer_get(py_property, struct _GdkAtom);
-		//auto test = gdk_x11_atom_to_xatom(property);
-		//printf("XXXX= %s\n", gdk_x11_get_xatom_name(test));
-	} else {
+	GdkAtom property = _get_safe_gdk_atom(self, py_property);
+	if (property == 0) {
 		PyErr_SetString(PyExc_TypeError, "arg1 must be a string of x11 atom name");
 		return NULL;
 	}
 
-	GdkAtom type = 0;
-	if (PyUnicode_Check(py_type)) {
-		// Do not unalocate
-		char * atom_name = PyUnicode_AsUTF8(py_type);
-		printf("XXXXX `%s'\n", atom_name);
-		property = gdk_atom_intern(atom_name, FALSE);
-	} else if (PyObject_IsInstance(py_type, get_module_state(self)->gdk_atom_type)) {
-		// Totally a guess, tested with following comented code.
-		type = pyg_pointer_get(py_type, struct _GdkAtom);
-		//auto test = gdk_x11_atom_to_xatom(type);
-		//printf("XXXX= %s\n", gdk_x11_get_xatom_name(test));
-	} else {
+	GdkAtom type = _get_safe_gdk_atom(self, py_type);
+	if (type == 0) {
 		PyErr_SetString(PyExc_TypeError, "arg2 must be a string of x11 atom name");
 		return NULL;
 	}
@@ -770,23 +771,26 @@ static PyObject * py_property_change(PyObject * self, PyObject * args)
 
 }
 
-inline bool _send_client_message_get_data(PyObject * data, long & dest) {
+inline bool _send_client_message_get_data(PyObject * self, PyObject * data, long & dest) {
 	auto gdk_display = gdk_display_get_default();
 
+	GdkAtom atom = _get_safe_gdk_atom(self, data);
+	if (atom == 0) {
+		if (PyLong_Check(data)) {
+			// if data is a long just use it.
+			dest = PyLong_AsLong(data);
+			printf("FOUND LONG = %d\n", dest);
+			return true;
+		} else {
+			return false;
+		}
 
-	if (PyUnicode_Check(data)) {
-		// if data is a string, we guess that the data is Atom.
-		// Do not unalocate
-		char * atom_name = PyUnicode_AsUTF8(data);
-		dest = gdk_x11_get_xatom_by_name_for_display(gdk_display, atom_name);
-		return true;
-	} else if (PyLong_Check(data)) {
-		// if data is a long just use it.
-		dest = PyLong_AsLong(data);
+	} else {
+		dest = gdk_x11_atom_to_xatom(atom);
+		printf("FOUND ATOM = %d\n", dest);
 		return true;
 	}
 
-	return false;
 }
 
 static PyObject * py_send_client_message(PyObject * self, PyObject * args)
@@ -806,57 +810,45 @@ static PyObject * py_send_client_message(PyObject * self, PyObject * args)
 			&py_data0, &py_data1, &py_data2, &py_data3, &py_data4))
 		return NULL;
 
-	GdkWindow * window = nullptr;
-	if (pygobject_check(py_window, pygobject_lookup_class(GDK_TYPE_WINDOW))) {
-		window = GDK_WINDOW(pygobject_get(py_window));
-	} else if (PyLong_Check(py_window)) {
-		window = gdk_x11_window_foreign_new_for_display(gdk_display, PyLong_AsLong(py_window));
-		if (window == nullptr) { // window
-			printf("WARNING: GdkWindow not found from XID\n");
-			Py_RETURN_NONE;
-		}
-	} else {
+	GdkWindow * window = _get_safe_gdk_window(py_window);
+	if (window == nullptr) {
 		PyErr_SetString(PyExc_TypeError, "arg0 must be a GdkWindow or XID");
 		return NULL;
 	}
 
-	Atom message_type = 0;
-	if (PyUnicode_Check(py_message_type)) {
-		// Do not unalocate
-		char * atom_name = PyUnicode_AsUTF8(py_message_type);
-		message_type = gdk_x11_get_xatom_by_name_for_display(gdk_display, atom_name);
-	} else {
+	GdkAtom gdk_message_type = _get_safe_gdk_atom(self, py_message_type);
+	if (gdk_message_type == 0) {
 		PyErr_SetString(PyExc_TypeError, "arg1 must be a string of x11 atom name");
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(py_data0, ev.xclient.data.l[0])) {
+	if (not _send_client_message_get_data(self, py_data0, ev.xclient.data.l[0])) {
 		PyErr_SetString(PyExc_TypeError, "arg2 must be an int or a string of x11 atom name");
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(py_data1, ev.xclient.data.l[1])) {
+	if (not _send_client_message_get_data(self, py_data1, ev.xclient.data.l[1])) {
 		PyErr_SetString(PyExc_TypeError, "arg3 must be an int or a string of x11 atom name");
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(py_data2, ev.xclient.data.l[2])) {
+	if (not _send_client_message_get_data(self, py_data2, ev.xclient.data.l[2])) {
 		PyErr_SetString(PyExc_TypeError, "arg4 must be an int or a string of x11 atom name");
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(py_data3, ev.xclient.data.l[3])) {
+	if (not _send_client_message_get_data(self, py_data3, ev.xclient.data.l[3])) {
 		PyErr_SetString(PyExc_TypeError, "arg5 must be an int or a string of x11 atom name");
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(py_data4, ev.xclient.data.l[4])) {
+	if (not _send_client_message_get_data(self, py_data4, ev.xclient.data.l[4])) {
 		PyErr_SetString(PyExc_TypeError, "arg6 must be an int or a string of x11 atom name");
 		return NULL;
 	}
 
 	ev.xclient.window = gdk_x11_window_get_xid(window);
-	ev.xclient.message_type = message_type;
+	ev.xclient.message_type = gdk_x11_atom_to_xatom(gdk_message_type);
 
 	XSendEvent(GDK_DISPLAY_XDISPLAY(gdk_display), ev.xclient.window, False, NoEventMask, &ev);
 
@@ -1145,7 +1137,7 @@ static PyObject * py_test_event(PyObject * self, PyObject * args)
 	    return NULL;
 
 
-	  if (PyObject_IsInstance(py_event, get_module_state(self)->gdk_event_type)) {
+	  if (PyObject_IsInstance(py_event, _get_module_state(self)->gdk_event_type)) {
 	  		GdkEvent * event = pyg_pointer_get(py_event, GdkEvent);
 	  		printf("event= %d\n", event->button.time);
 	  		event->configure.width = 42;
@@ -1220,17 +1212,17 @@ PyMODINIT_FUNC PyInit_PageLauncherHook(void)
   PyModule_AddObject(m , "xlib", xlib_module);
 
   // implace call of constructor.
-  new (get_module_state(m)) module_state;
+  new (_get_module_state(m)) module_state;
 
-  get_module_state(m)->gdk_event_type = PyObject_GetAttrString(gdk_module, "Event");
-  get_module_state(m)->gdk_atom_type = PyObject_GetAttrString(gdk_module, "Atom");
-  get_module_state(m)->xlib_x11_visual_type = PyObject_GetAttrString(xlib_module, "Visual");
+  _get_module_state(m)->gdk_event_type = PyObject_GetAttrString(gdk_module, "Event");
+  _get_module_state(m)->gdk_atom_type = PyObject_GetAttrString(gdk_module, "Atom");
+  _get_module_state(m)->xlib_x11_visual_type = PyObject_GetAttrString(xlib_module, "Visual");
 
   /* create the PageLauncherHook exception */
   auto error_obj = PyErr_NewException("PageLauncherHook.error", NULL, NULL);
   Py_INCREF(error_obj);
   PyModule_AddObject(m, "error", error_obj);
-  get_module_state(m)->Error = error_obj;
+  _get_module_state(m)->Error = error_obj;
 
   if (PyType_Ready(&page_XEventType) >= 0) {
           Py_INCREF(&page_XEventType);
