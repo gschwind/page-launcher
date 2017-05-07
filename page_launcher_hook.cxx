@@ -20,7 +20,7 @@
 #include "gdkxevent/xmotionevent.hxx"
 #include "gdkxevent/xdestroywindowevent.hxx"
 
-static std::map<std::string, int> _xevent_types = {
+static std::map<std::string, int> const _xevent_types = {
 	{ "KeyPress", 2 },
 	{ "KeyRelease", 3 },
 	{ "ButtonPress", 4 },
@@ -55,6 +55,35 @@ static std::map<std::string, int> _xevent_types = {
 	{ "ClientMessage", 33 },
 	{ "MappingNotify", 34 },
 	{ "GenericEvent", 35 }
+};
+
+static std::map<std::string, int> const _xevent_masks = {
+	{ "NoEventMask", 0L },
+	{ "KeyPressMask", (1L << 0) },
+	{ "KeyReleaseMask", (1L << 1) },
+	{ "ButtonPressMask", (1L << 2) },
+	{ "ButtonReleaseMask", (1L << 3) },
+	{ "EnterWindowMask", (1L << 4) },
+	{ "LeaveWindowMask", (1L << 5) },
+	{ "PointerMotionMask", (1L << 6) },
+	{ "PointerMotionHintMask", (1L << 7) },
+	{ "Button1MotionMask", (1L << 8) },
+	{ "Button2MotionMask", (1L << 9) },
+	{ "Button3MotionMask", (1L << 10) },
+	{ "Button4MotionMask", (1L << 11) },
+	{ "Button5MotionMask", (1L << 12) },
+	{ "ButtonMotionMask", (1L << 13) },
+	{ "KeymapStateMask", (1L << 14) },
+	{ "ExposureMask", (1L << 15) },
+	{ "VisibilityChangeMask", (1L << 16) },
+	{ "StructureNotifyMask", (1L << 17) },
+	{ "ResizeRedirectMask", (1L << 18) },
+	{ "SubstructureNotifyMask", (1L << 19) },
+	{ "SubstructureRedirectMask", (1L << 20) },
+	{ "FocusChangeMask", (1L << 21) },
+	{ "PropertyChangeMask", (1L << 22) },
+	{ "ColormapChangeMask", (1L << 23) },
+	{ "OwnerGrabButtonMask", (1L << 24) }
 };
 
 
@@ -797,6 +826,7 @@ static PyObject * py_send_client_message(PyObject * self, PyObject * args)
 {
 	PyObject * py_window;
 	PyObject * py_message_type;
+	PyObject * py_event_mask;
 	PyObject * py_data0;
 	PyObject * py_data1;
 	PyObject * py_data2;
@@ -806,8 +836,9 @@ static PyObject * py_send_client_message(PyObject * self, PyObject * args)
 
 	auto gdk_display = gdk_display_get_default();
 
-	if (!PyArg_ParseTuple(args, "OOOOOOO", &py_window, &py_message_type,
-			&py_data0, &py_data1, &py_data2, &py_data3, &py_data4))
+	if (!PyArg_ParseTuple(args, "OOOOOOOO", &py_window, &py_message_type,
+			&py_event_mask, &py_data0, &py_data1, &py_data2, &py_data3,
+			&py_data4))
 		return NULL;
 
 	GdkWindow * window = _get_safe_gdk_window(py_window);
@@ -822,35 +853,44 @@ static PyObject * py_send_client_message(PyObject * self, PyObject * args)
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(self, py_data0, ev.xclient.data.l[0])) {
-		PyErr_SetString(PyExc_TypeError, "arg2 must be an int or a string of x11 atom name");
+	unsigned long event_mask = NoEventMask;
+	if(PyLong_Check(py_event_mask)) {
+		event_mask = PyLong_AsLong(py_event_mask);
+	} else {
+		PyErr_SetString(PyExc_TypeError, "arg2 must be the event_mask as integer");
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(self, py_data1, ev.xclient.data.l[1])) {
+	if (not _send_client_message_get_data(self, py_data0, ev.xclient.data.l[0])) {
 		PyErr_SetString(PyExc_TypeError, "arg3 must be an int or a string of x11 atom name");
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(self, py_data2, ev.xclient.data.l[2])) {
+	if (not _send_client_message_get_data(self, py_data1, ev.xclient.data.l[1])) {
 		PyErr_SetString(PyExc_TypeError, "arg4 must be an int or a string of x11 atom name");
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(self, py_data3, ev.xclient.data.l[3])) {
+	if (not _send_client_message_get_data(self, py_data2, ev.xclient.data.l[2])) {
 		PyErr_SetString(PyExc_TypeError, "arg5 must be an int or a string of x11 atom name");
 		return NULL;
 	}
 
-	if (not _send_client_message_get_data(self, py_data4, ev.xclient.data.l[4])) {
+	if (not _send_client_message_get_data(self, py_data3, ev.xclient.data.l[3])) {
 		PyErr_SetString(PyExc_TypeError, "arg6 must be an int or a string of x11 atom name");
+		return NULL;
+	}
+
+	if (not _send_client_message_get_data(self, py_data4, ev.xclient.data.l[4])) {
+		PyErr_SetString(PyExc_TypeError, "arg7 must be an int or a string of x11 atom name");
 		return NULL;
 	}
 
 	ev.xclient.window = gdk_x11_window_get_xid(window);
 	ev.xclient.message_type = gdk_x11_atom_to_xatom(gdk_message_type);
 
-	XSendEvent(GDK_DISPLAY_XDISPLAY(gdk_display), ev.xclient.window, False, NoEventMask, &ev);
+	XSendEvent(GDK_DISPLAY_XDISPLAY(gdk_display), ev.xclient.window, False,
+			event_mask, &ev);
 
 	Py_RETURN_NONE;
 }
@@ -1250,6 +1290,10 @@ PyMODINIT_FUNC PyInit_PageLauncherHook(void)
   }
 
   for(auto &x: _xevent_types) {
+	  PyModule_AddObject(m, x.first.c_str(), PyLong_FromLong(x.second));
+  }
+
+  for(auto &x: _xevent_masks) {
 	  PyModule_AddObject(m, x.first.c_str(), PyLong_FromLong(x.second));
   }
 

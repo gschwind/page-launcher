@@ -1195,7 +1195,7 @@ class PanelTray(Clutter.Group):
 
             PageLauncherHook.property_change(self.window, "_NET_SYSTEM_TRAY_VISUAL", "VISUALID", 32, Gdk.PropMode.REPLACE, struct.pack("I", visualid), 1)
             # This should sent on SelectionNotify.
-            PageLauncherHook.send_client_message(root_window, "MANAGER", 0, selection_atom, self.window.get_xid(), 0, 0)
+            PageLauncherHook.send_client_message(root_window, "MANAGER", PageLauncherHook.StructureNotifyMask, 0, selection_atom, self.window.get_xid(), 0, 0)
 
             #PageLauncherHook.set_system_tray_filter(self.window, display, self)
             # self.window.add_filter(self.toto)
@@ -1284,6 +1284,7 @@ class PanelTray(Clutter.Group):
             PageLauncherHook.send_client_message(
                 gdk_dock_window,
                 "_XEMBED",
+                PageLauncherHook.NoEventMask,
                 0,
                 XEMBED_EMBEDDED_NOTIFY,
                 0, gdk_container_window.get_xid(), 1
@@ -1345,6 +1346,7 @@ class PanelTray(Clutter.Group):
         PageLauncherHook.send_client_message(
             gdk_dock_window,
             "_XEMBED",
+            PageLauncherHook.NoEventMask,
             0,
             XEMBED_EMBEDDED_NOTIFY,
             0, gdk_container_window.get_xid(), 1
@@ -1353,6 +1355,7 @@ class PanelTray(Clutter.Group):
         PageLauncherHook.send_client_message(
             gdk_dock_window,
             "_XEMBED",
+            PageLauncherHook.NoEventMask,
             0,
             XEMBED_WINDOW_ACTIVATE,
             0, 0, 0
@@ -1361,6 +1364,7 @@ class PanelTray(Clutter.Group):
         PageLauncherHook.send_client_message(
             gdk_dock_window,
             "_XEMBED",
+            PageLauncherHook.NoEventMask,
             0,
             XEMBED_FOCUS_IN,
             XEMBED_FOCUS_CURRENT,
