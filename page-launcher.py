@@ -40,6 +40,7 @@ from gi.repository import Wnck
 
 import PageLauncherHook
 
+
 from xdg.IconTheme import getIconPath
 from xdg.DesktopEntry import DesktopEntry
 
@@ -49,6 +50,10 @@ from dbus.mainloop.glib import DBusGMainLoop
 
 import shlex
 import subprocess
+
+SYSTEM_TRAY_REQUEST_DOCK    = 0
+SYSTEM_TRAY_BEGIN_MESSAGE   = 1
+SYSTEM_TRAY_CANCEL_MESSAGE  = 2
 
 SYSTEM_TRAY_ORIENTATION_HORZ = 0
 SYSTEM_TRAY_ORIENTATION_VERT = 1
@@ -1115,8 +1120,9 @@ class PanelTray(Clutter.Group):
         # self.add_child(self.text)
 
         display = ClutterGdk.get_default_display()
-        root_height = display.get_default_screen().get_root_window().get_height()
-        root_width = display.get_default_screen().get_root_window().get_width()
+        root_window = display.get_default_screen().get_root_window()
+        root_height = root_window.get_height()
+        root_width = root_window.get_width()
 
         screen = Wnck.Screen.get_default()
 
@@ -1135,7 +1141,7 @@ class PanelTray(Clutter.Group):
         res = Gdk.selection_owner_set_for_display(display,
                                                   self.window,
                                                   selection_atom,
-                                                  timestamp,
+                                                  0,
                                                   True)
         # print(selection_atom_name )
         if not res:
@@ -1147,12 +1153,59 @@ class PanelTray(Clutter.Group):
             else:
                 print("Owner is ok")
 
+
+            event_mask = self.window.get_events()
+            event_mask |= Gdk.EventMask.SUBSTRUCTURE_MASK|Gdk.EventMask.STRUCTURE_MASK
+            self.window.set_events(event_mask)
+            PageLauncherHook.add_filter(self.window, self._filter_events)
+
+            # print("XXXroot", root_window)
+            # event_mask = root_window.get_events()
+            # event_mask |= Gdk.EventMask.SUBSTRUCTURE_MASK|Gdk.EventMask.STRUCTURE_MASK
+            # root_window.set_events(event_mask)
+            # PageLauncherHook.add_filter(root_window, self._filter_events)
+
             #PageLauncherHook.set_system_tray_orientation(self.window, True)
             self._set_system_tray_orientation(SYSTEM_TRAY_ORIENTATION_VERT)
 
             PageLauncherHook.set_system_tray_visual(self.window, display)
-            PageLauncherHook.set_system_tray_filter(self.window, display, self)
+
+            # This should sent on SelectionNotify.
+            PageLauncherHook.send_client_message(root_window, "MANAGER", 0, GdkX11.x11_atom_to_xatom_for_display(display, selection_atom), self.window.get_xid(), 0, 0)
+
+            #PageLauncherHook.set_system_tray_filter(self.window, display, self)
             # self.window.add_filter(self.toto)
+
+    def _filter_events(self, xevent, gdkevent):
+        print("_filter_events", xevent.type)
+        if xevent.type == PageLauncherHook.ClientMessage:
+            xevent = xevent.XClientMessageEvent
+            if xevent.message_type == self.atom_opcode:
+                data = xevent.data_as_long
+                if data[1] == SYSTEM_TRAY_REQUEST_DOCK:
+                    self.dock_request(data[2], xevent.window)
+                elif data[1] == SYSTEM_TRAY_BEGIN_MESSAGE:
+                    pass
+                elif data[1] == SYSTEM_TRAY_CANCEL_MESSAGE:
+                    self.message_cancel(data[2], xevent.window)
+                return Gdk.FilterReturn.REMOVE
+        elif xevent.type == PageLauncherHook.DestroyNotify:
+            xevent = xevent.XDestroyWindowEvent
+            self.undock_request(xevent.event. xevent.window)
+        elif xevent.type == PageLauncherHook.SelectionClear:
+            print("SelectionClear")
+            # TODO
+            pass
+        elif xevent.type == PageLauncherHook.SelectionNotify:
+            print("SelectionNotify")
+            # TODO
+            pass
+        elif xevent.type == PageLauncherHook.SelectionRequest:
+            print("SelectionRequest")
+            # TODO
+            pass
+
+        return Gdk.FilterReturn.CONTINUE
 
     def _set_system_tray_orientation(self, orientation):
         CARDINAL = Gdk.atom_intern("CARDINAL", False) # TODO: cache
@@ -1411,18 +1464,18 @@ class PanelView(Clutter.Stage):
         self.wnck_screen.force_update()
         apps = self.wnck_screen.get_windows_stacked()
         # print(apps)
-        for app in apps:
-            print('----')
-            print(app.get_name())
-            #print(app.get_icon_name())
-            print(app.get_class_group_name())
-            #print(app.get_class_instance_name())
-            print(app.get_xid())
-            ##print(app.get_session_id_utf8())
-            print(app.is_sticky())
-            print(app.get_window_type())
-            print(app.get_transient())
-            print(app.get_application().get_pid())
+        # for app in apps:
+        #     print('----')
+        #     print(app.get_name())
+        #     #print(app.get_icon_name())
+        #     print(app.get_class_group_name())
+        #     #print(app.get_class_instance_name())
+        #     print(app.get_xid())
+        #     ##print(app.get_session_id_utf8())
+        #     print(app.is_sticky())
+        #     print(app.get_window_type())
+        #     print(app.get_transient())
+        #     print(app.get_application().get_pid())
 
         self.update_cnt += 1
         print("==================================")
