@@ -1120,6 +1120,9 @@ class PanelTray(Clutter.Group):
         # self.add_child(self.text)
 
         display = ClutterGdk.get_default_display()
+
+        display.error_trap_push()
+
         root_window = display.get_default_screen().get_root_window()
         root_height = root_window.get_height()
         root_width = root_window.get_width()
@@ -1153,7 +1156,6 @@ class PanelTray(Clutter.Group):
             else:
                 print("Owner is ok")
 
-
             event_mask = self.window.get_events()
             event_mask |= Gdk.EventMask.SUBSTRUCTURE_MASK|Gdk.EventMask.STRUCTURE_MASK
             self.window.set_events(event_mask)
@@ -1168,13 +1170,23 @@ class PanelTray(Clutter.Group):
             #PageLauncherHook.set_system_tray_orientation(self.window, True)
             self._set_system_tray_orientation(SYSTEM_TRAY_ORIENTATION_VERT)
 
-            PageLauncherHook.set_system_tray_visual(self.window, display)
+            self.gdk_visual = self.window.get_visual();
+            self.x11_visual = GdkX11.X11Visual.get_xvisual(self.gdk_visual)
+            print(self.x11_visual)
+
+            visualid = PageLauncherHook.XVisualIDFromVisual(self.x11_visual)
+            print(visualid)
+
+            PageLauncherHook.property_change(self.window, Gdk.atom_intern("_NET_SYSTEM_TRAY_VISUAL", False), Gdk.atom_intern("VISUALID", False), 32, Gdk.PropMode.REPLACE, struct.pack("I", visualid), 1)
+
+            #PageLauncherHook.set_system_tray_visual(self.window, display)
 
             # This should sent on SelectionNotify.
             PageLauncherHook.send_client_message(root_window, "MANAGER", 0, GdkX11.x11_atom_to_xatom_for_display(display, selection_atom), self.window.get_xid(), 0, 0)
 
             #PageLauncherHook.set_system_tray_filter(self.window, display, self)
             # self.window.add_filter(self.toto)
+        display.error_trap_pop_ignored()
 
     def _filter_events(self, xevent, gdkevent):
         print("_filter_events", xevent.type)

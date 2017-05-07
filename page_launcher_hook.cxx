@@ -73,6 +73,8 @@ struct module_state {
   // store the gdk_atom_type i.e. gi.repository.Gdk.Atom
   PyObject * gdk_atom_type;
   PyObject * gdk_event_type;
+  PyObject * xlib_x11_visual_type;
+
 };
 
 inline module_state * get_module_state(PyObject * m) {
@@ -200,6 +202,25 @@ static PyObject * py_set_system_tray_orientation(PyObject * self,
       _net_system_tray_orientation, cardinal, 32, GDK_PROP_MODE_REPLACE,
       (guchar*) data, 1);
   Py_RETURN_NONE;
+}
+
+static PyObject * py_XVisualIDFromVisual(PyObject * self, PyObject * args)
+{
+	PyObject * py_visual; // the GdkWindow
+	if (!PyArg_ParseTuple(args, "O", &py_visual)) {
+		return NULL;
+	}
+
+	Visual * visual = nullptr;
+	if (PyObject_IsInstance(py_visual, get_module_state(self)->xlib_x11_visual_type)) {
+		visual = pyg_pointer_get(py_visual, Visual);
+	} else {
+		PyErr_SetString(PyExc_TypeError, "arg0 must be a xlib.Visual");
+		return NULL;
+	}
+
+    return PyLong_FromUnsignedLong(XVisualIDFromVisual(visual));
+
 }
 
 static PyObject * py_set_system_tray_visual(PyObject * self, PyObject * args) {
@@ -651,6 +672,8 @@ static PyObject * py_property_change(PyObject * self, PyObject * args)
 
 	auto gdk_display = gdk_display_get_default();
 
+	printf("ZZZZ\n");
+
 	if (!PyArg_ParseTuple(args, "OOOOOOO", &py_window, &py_property,
 			&py_type, &py_format, &py_propmode, &py_data, &py_nelements))
 		return NULL;
@@ -673,6 +696,7 @@ static PyObject * py_property_change(PyObject * self, PyObject * args)
 	if (PyUnicode_Check(py_property)) {
 		// Do not unalocate
 		char * atom_name = PyUnicode_AsUTF8(py_property);
+		printf("XXXXX `%s'\n", atom_name);
 		property = gdk_atom_intern(atom_name, FALSE);
 	} else if (PyObject_IsInstance(py_property, get_module_state(self)->gdk_atom_type)) {
 		// Totally a guess, tested with following comented code.
@@ -688,6 +712,7 @@ static PyObject * py_property_change(PyObject * self, PyObject * args)
 	if (PyUnicode_Check(py_type)) {
 		// Do not unalocate
 		char * atom_name = PyUnicode_AsUTF8(py_type);
+		printf("XXXXX `%s'\n", atom_name);
 		property = gdk_atom_intern(atom_name, FALSE);
 	} else if (PyObject_IsInstance(py_type, get_module_state(self)->gdk_atom_type)) {
 		// Totally a guess, tested with following comented code.
@@ -1148,6 +1173,7 @@ static PyMethodDef methods[] = {
 	TPL_FUNCTION_DOC(test_event, "Test GdkEvent structure"),
 	TPL_FUNCTION_DOC(add_filter, "Add event filter to a GdkWindow"),
 	TPL_FUNCTION_DOC(remove_filter, "Remove event filter to a GdkWindow"),
+	TPL_FUNCTION_DOC(XVisualIDFromVisual, "Find the VisualID from a visual"),
     { NULL, NULL, 0, NULL } // sentinel
 };
 
@@ -1188,11 +1214,18 @@ PyMODINIT_FUNC PyInit_PageLauncherHook(void)
 	  return NULL;
   PyModule_AddObject(m , "Gdk", gdk_module);
 
+  auto xlib_module = PyImport_ImportModule("gi.repository.xlib");
+  if(xlib_module == NULL)
+	  return NULL;
+  PyModule_AddObject(m , "xlib", xlib_module);
+
   // implace call of constructor.
   new (get_module_state(m)) module_state;
 
   get_module_state(m)->gdk_event_type = PyObject_GetAttrString(gdk_module, "Event");
   get_module_state(m)->gdk_atom_type = PyObject_GetAttrString(gdk_module, "Atom");
+  get_module_state(m)->xlib_x11_visual_type = PyObject_GetAttrString(xlib_module, "Visual");
+
   /* create the PageLauncherHook exception */
   auto error_obj = PyErr_NewException("PageLauncherHook.error", NULL, NULL);
   Py_INCREF(error_obj);
