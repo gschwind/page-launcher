@@ -893,6 +893,27 @@ static PyObject * py_send_client_message(PyObject * self, PyObject * args)
 
 	Py_RETURN_NONE;
 }
+
+static PyObject * py_XAddToSaveSet(PyObject * self, PyObject * args)
+{
+	PyObject * py_window;
+
+	if (!PyArg_ParseTuple(args, "O", &py_window))
+		return NULL;
+
+	GdkWindow * window = _get_safe_gdk_window(py_window);
+	if (window == nullptr) {
+		PyErr_SetString(PyExc_TypeError, "arg0 must be a GdkWindow or XID");
+		return NULL;
+	}
+	auto gdk_display = gdk_display_get_default();
+
+	XAddToSaveSet(gdk_x11_display_get_xdisplay(gdk_display), gdk_x11_window_get_xid(window));
+
+	Py_RETURN_NONE;
+
+}
+
 //
 //void xembed_send(GdkDisplay * display, uint32_t win_id, uint32_t in1,
 //    uint32_t in2, uint32_t in3, uint32_t in4) {
@@ -1205,6 +1226,7 @@ static PyMethodDef methods[] = {
 	TPL_FUNCTION_DOC(add_filter, "Add event filter to a GdkWindow"),
 	TPL_FUNCTION_DOC(remove_filter, "Remove event filter to a GdkWindow"),
 	TPL_FUNCTION_DOC(XVisualIDFromVisual, "Find the VisualID from a visual"),
+	TPL_FUNCTION_DOC(XAddToSaveSet, "the libX11 XAddToSaveSet"),
     { NULL, NULL, 0, NULL } // sentinel
 };
 
