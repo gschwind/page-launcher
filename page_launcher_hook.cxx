@@ -135,7 +135,6 @@ inline GdkAtom _get_safe_gdk_atom(PyObject * self, PyObject * py_atom) {
 		// Do not unalocate
 		Py_ssize_t size;
 		char * atom_name = PyUnicode_AsUTF8AndSize(py_atom, &size);
-		printf("XXXXX `%s' %d\n", atom_name, size);
 		gdk_atom = gdk_atom_intern(atom_name, FALSE);
 	} else if (PyObject_IsInstance(py_atom, _get_module_state(self)->gdk_atom_type)) {
 		// Totally a guess, tested with following comented code.
@@ -808,7 +807,6 @@ inline bool _send_client_message_get_data(PyObject * self, PyObject * data, long
 		if (PyLong_Check(data)) {
 			// if data is a long just use it.
 			dest = PyLong_AsLong(data);
-			printf("FOUND LONG = %d\n", dest);
 			return true;
 		} else {
 			return false;
@@ -816,7 +814,6 @@ inline bool _send_client_message_get_data(PyObject * self, PyObject * data, long
 
 	} else {
 		dest = gdk_x11_atom_to_xatom(atom);
-		printf("FOUND ATOM = %d\n", dest);
 		return true;
 	}
 
