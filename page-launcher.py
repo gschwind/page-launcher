@@ -1268,15 +1268,15 @@ class PanelTray(Clutter.Group):
                 print("WARNING: unexpected destroyed dock")
                 continue
 
-            x = int(pos_x[ind % self.max_col] + self.sub_offset)
-            y = int(tmp_y + y)
+            x_ = int(pos_x[ind % self.max_col] + self.sub_offset)
+            y_ = int(tmp_y + y)
             w = self.sz_x_ico
             h = self.sz_y_ico
 
             display = ClutterGdk.get_default_display()
             display.error_trap_push()
-            print(x,y,w,h)
-            gdk_container_window.move_resize(x, y, w, h)
+            print(x_,y_,w,h)
+            gdk_container_window.move_resize(x_, y_, w, h)
             gdk_dock_window.move_resize(0, 0, w, h)
 
             PageLauncherHook.send_client_message(
