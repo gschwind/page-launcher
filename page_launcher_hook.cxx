@@ -886,8 +886,10 @@ static PyObject * py_send_client_message(PyObject * self, PyObject * args)
 		return NULL;
 	}
 
+	ev.xclient.type = ClientMessage;
 	ev.xclient.window = gdk_x11_window_get_xid(window);
 	ev.xclient.message_type = gdk_x11_atom_to_xatom(gdk_message_type);
+	ev.xclient.format = 32;
 
 	XSendEvent(GDK_DISPLAY_XDISPLAY(gdk_display), ev.xclient.window, False,
 			event_mask, &ev);
