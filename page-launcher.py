@@ -224,6 +224,7 @@ class apps_entry:
 
     def set_position(self, x, y):
         self.rect.set_position(x, y)
+        print(self.icon_offset_x,self.icon_offset_y, self.text_offset_x, self.icon_offset_y, self.text_comment_offset_x, self.text_comment_offset_x)
         self.icon.set_position(x + self.icon_offset_x, y + self.icon_offset_y)
         self.text.set_position(x + self.text_offset_x, y + self.text_offset_y)
         self.text_comment.set_position(x + self.text_comment_offset_x, y + self.text_comment_offset_y)
@@ -492,9 +493,9 @@ class DashSlide(Slide):
         self.text_size = 64
         self.margin = 2
         self.y_offset = self.text_size + 2 * self.margin
-        self.item_size_x = self.slide_size
-        self.item_size_y = 64
         self.ico_size = ico_size
+        self.item_size_x = self.slide_size
+        self.item_size_y = ico_size*3/2
 
         self.rect = Clutter.Actor()
         if parent.side == 'left':
@@ -1274,6 +1275,7 @@ class PanelTray(Clutter.Group):
 
             display = ClutterGdk.get_default_display()
             display.error_trap_push()
+            print(x,y,w,h)
             gdk_container_window.move_resize(x, y, w, h)
             gdk_dock_window.move_resize(0, 0, w, h)
 
