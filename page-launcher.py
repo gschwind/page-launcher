@@ -1335,6 +1335,7 @@ class PanelTray(Clutter.Group):
         gdk_container_window.stick()
         gdk_container_window.set_transient_for(self.window)
         gdk_container_window.set_background_rgba(Gdk.RGBA(1.0, 0.0, 0.0, 0.5))
+        PageLauncherHook.XAddToSaveSet(gdk_dock_window)
         gdk_dock_window.reparent(gdk_container_window, 0, 0)
         gdk_container_window.show()
         gdk_dock_window.show()
