@@ -908,7 +908,7 @@ class PanelClock(Clutter.Group):
             self.text.set_translation(0, self.text.get_width(), 0)
             self.sub_offset_y = (self.icon_size_y - self.text.get_width()) / 2
             self.sub_offset_x = (self.icon_size_x - self.text.get_height()) / 2
-            print([self.text.get_width(), self.text.get_height(), self.sub_offset_x, self.sub_offset_y])
+            #print([self.text.get_width(), self.text.get_height(), self.sub_offset_x, self.sub_offset_y])
         self.text.set_position(self.sub_offset_x, self.sub_offset_y)
         self.icon_back.set_size(self.icon_size_x, self.icon_size_y)
 
@@ -1202,7 +1202,6 @@ class PanelTray(Clutter.Group):
         display.error_trap_pop_ignored()
 
     def _filter_events(self, xevent, gdkevent):
-        print("_filter_events", xevent.type)
         if xevent.type == PageLauncherHook.ClientMessage:
             xevent = xevent.XClientMessageEvent
             if xevent.message_type == self.atom_opcode:
@@ -1261,7 +1260,6 @@ class PanelTray(Clutter.Group):
         pos_x = self.update_pos_x(min(len(self.dock_list) - ind, self.max_col))
         for wid in self.dock_list:
             gdk_container_window, gdk_dock_window = self.dock_list[wid]
-            print("Move tray ", hex(wid))
             if gdk_container_window.is_destroyed():
                 print("WARNING: unexpected destroyed dock")
                 continue
@@ -1273,8 +1271,6 @@ class PanelTray(Clutter.Group):
             y = int(tmp_y + y)
             w = self.sz_x_ico
             h = self.sz_y_ico
-
-            print(x, y, w, h)
 
             display = ClutterGdk.get_default_display()
             display.error_trap_push()
