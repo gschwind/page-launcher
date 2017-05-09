@@ -204,7 +204,7 @@ class apps_entry:
             else:
                 icon_path = getIconPath(icon_name, size)
         # TODO: use a default icon.
-        if not os.path.exists(icon_path):
+        if (icon_path is None) or (not os.path.exists(icon_path)):
             icon_path = '/usr/share/icons/mate/48x48/apps/gnome-terminal.png'
         return Clutter.Texture.new_from_file(icon_path)
 
@@ -1275,7 +1275,7 @@ class PanelTray(Clutter.Group):
 
             display = ClutterGdk.get_default_display()
             display.error_trap_push()
-            print(x_,y_,w,h)
+            #print(x_,y_,w,h)
             gdk_container_window.move_resize(x_, y_, w, h)
             gdk_dock_window.move_resize(0, 0, w, h)
 

@@ -1,10 +1,4 @@
 #!/bin/bash
 
-REALPATH=`dirname "$0"`
-if [ "x${REALPATH}" = "x/usr/bin" ]; then
- python3 -O "/usr/lib/page_launcher/main.py"
-else
- REALPATH=`dirname "$0"`
- python3 -O "${REALPATH}/main.py"
-fi
+page-launcher.py > /tmp/launcher.log
 
